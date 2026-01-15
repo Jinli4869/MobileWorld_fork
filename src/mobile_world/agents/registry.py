@@ -11,10 +11,12 @@ from pathlib import Path
 from loguru import logger
 
 from mobile_world.agents.base import BaseAgent
+from mobile_world.agents.implementations.gelab_agent import GelabAgent
+from mobile_world.agents.implementations.general_e2e_agent import GeneralE2EAgentMCP
+from mobile_world.agents.implementations.mai_ui_agent import MAIUINaivigationAgent
 from mobile_world.agents.implementations.planner_executor import PlannerExecutorAgentMCP
 from mobile_world.agents.implementations.qwen3vl import Qwen3VLAgentMCP
-from mobile_world.agents.implementations.mai_ui_agent import MAIUINaivigationAgent
-from mobile_world.agents.implementations.general_e2e_agent import GeneralE2EAgentMCP
+from mobile_world.agents.implementations.seed_agent import SeedAgent
 
 AGENT_CONFIGS = {
     "qwen3vl": {
@@ -22,21 +24,18 @@ AGENT_CONFIGS = {
     },
     "planner_executor": {
         "class": PlannerExecutorAgentMCP,
-        "runtime_conf": {
-            "history_n_images": 3,
-        },
     },
     "mai_ui_agent": {
         "class": MAIUINaivigationAgent,
     },
     "general_e2e": {
         "class": GeneralE2EAgentMCP,
-        "runtime_conf": {
-            "history_n_images": 3,
-            "temperature": 0.0,
-            "max_tokens": 2048,
-        },
-        "scale_factor": 1000,
+    },
+    "seed_agent": {
+        "class": SeedAgent,
+    },
+    "gelab_agent": {
+        "class": GelabAgent,
     },
 }
 
@@ -96,7 +95,7 @@ def load_agent_from_file(file_path: str) -> type[BaseAgent]:
 
 
 def create_agent(
-    agent_type: str, model_name: str, llm_base_url: str, api_key: str = 'empty', **kwargs
+    agent_type: str, model_name: str, llm_base_url: str, api_key: str = "empty", **kwargs
 ):
     """Create an agent instance based on the agent type.
 
@@ -119,57 +118,17 @@ def create_agent(
                 api_key=api_key,
                 **kwargs,
             )
-        except TypeError:
-            try:
-                return agent_class(
-                    model_name=model_name,
-                    llm_base_url=llm_base_url,
-                    **kwargs,
-                )
-            except TypeError:
-                return agent_class(**kwargs)
+        except Exception as e:
+            raise ValueError(f"Error creating agent: {e}")
 
     # Otherwise, use the registry
     if agent_type not in AGENT_CONFIGS:
         raise ValueError(f"Unsupported agent type: {agent_type}")
 
-    config = AGENT_CONFIGS[agent_type]
-
-    agent_class = config["class"]
-
-    if agent_type == "qwen3vl":
-        return agent_class(
-            model_name=model_name,
-            llm_base_url=llm_base_url,
-            tools=kwargs["env"].tools,
-            api_key=os.getenv("API_KEY", "empty"),
-        )
-    elif agent_type == "planner_executor":
-        return agent_class(
-            model_name=model_name,
-            llm_base_url=llm_base_url,
-            tools=kwargs["env"].tools,
-            api_key=api_key,
-            runtime_conf=config["runtime_conf"],
-            **kwargs,
-        )
-    elif agent_type == "mai_ui_agent":
-        return agent_class(
-            model_name=model_name,
-            llm_base_url=llm_base_url,
-            tools=kwargs["env"].tools,
-            api_key=api_key,
-            **kwargs,
-        )
-    elif agent_type == "general_e2e":
-        # Extract scale_factor from kwargs to avoid duplicate keyword argument
-        scale_factor = kwargs.pop("scale_factor", config.get("scale_factor", 1000))
-        return agent_class(
-            model_name=model_name,
-            llm_base_url=llm_base_url,
-            tools=kwargs["env"].tools,
-            api_key=api_key,
-            runtime_conf=config["runtime_conf"],
-            scale_factor=scale_factor,
-            **kwargs,
-        )
+    return AGENT_CONFIGS[agent_type]["class"](
+        model_name=model_name,
+        llm_base_url=llm_base_url,
+        tools=kwargs["env"].tools,
+        api_key=api_key,
+        **kwargs,
+    )
