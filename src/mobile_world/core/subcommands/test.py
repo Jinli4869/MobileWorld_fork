@@ -26,6 +26,12 @@ def configure_parser(subparsers: argparse._SubParsersAction) -> None:
         type=str,
         help="The goal/task description to execute",
     )
+    test_parser.add_argument(
+        "log_verbose",
+        type=bool,
+        help="Whether to log verbose messages",
+        default=False,
+    )
 
 
 async def execute(args: argparse.Namespace) -> None:
@@ -63,6 +69,7 @@ async def execute(args: argparse.Namespace) -> None:
         executor_llm_base_url=args.executor_llm_base_url,
         executor_model_name=args.executor_model_name,
         executor_agent_class=args.executor_agent_class,
+        log_verbose=args.log_verbose,
     )
 
     if result.get("success"):

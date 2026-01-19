@@ -269,6 +269,7 @@ def run_user_task(
     env_name_prefix: str = "mobile_world_env",
     env_image: str = "mobile_world",
     enable_mcp: bool = False,
+    log_verbose: bool = False,
     **kwargs,
 ) -> dict:
     """Run a single user-defined task.
@@ -294,7 +295,8 @@ def run_user_task(
         dict: Result containing steps executed and duration
     """
     aw_url = env_validation(aw_url, device)
-    logger.remove()
+    if not log_verbose:
+        logger.remove()
 
     if enable_mcp:
         env = AndroidMCPEnvClient(aw_url, device, step_wait_time=step_wait_time)
