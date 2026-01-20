@@ -25,6 +25,8 @@ for standard_action, aliases in ACTION_ALIASES.items():
         NORMALIZED_ACTION_MAP[alias.replace(" ", "_")] = standard_action
         NORMALIZED_ACTION_MAP[alias] = standard_action
 
+CLAUDE_IMAGE_SIZE = (1280, 720)
+
 
 def normalize_action_type(action_type: str) -> str:
     if not action_type:
@@ -69,7 +71,10 @@ def parse_action(plan_output: str) -> tuple[str, str]:
 
 
 def parse_response_to_action(
-    action_str: str, image_width: int, image_height: int, scale_factor: int = 1000
+    action_str: str,
+    image_width: int,
+    image_height: int,
+    scale_factor: int | tuple[int, int] = 1000,
 ) -> dict:
     """
     Parse the JSON action from response and normalize it.
@@ -80,7 +85,6 @@ def parse_response_to_action(
         image_width: Width of the screenshot image
         image_height: Height of the screenshot image
         scale_factor: Scale factor for the coordinates
-
     Returns:
         Dictionary with action type and absolute coordinates
     """
@@ -94,6 +98,9 @@ def parse_response_to_action(
 
         action_data["action_type"] = normalized_action_type
         action_type = normalized_action_type
+        scale_factor_x, scale_factor_y = (
+            [scale_factor, scale_factor] if isinstance(scale_factor, int) else scale_factor
+        )
 
         # Handle coordinate-based actions
         if action_type in ["click", "double_tap", "long_press"]:
@@ -103,8 +110,8 @@ def parse_response_to_action(
                 if isinstance(coord, list) and len(coord) == 2:
                     # Convert relative coordinates (0-999) to absolute coordinates
                     relative_x, relative_y = coord[0], coord[1]
-                    absolute_x = int(relative_x * image_width / scale_factor)
-                    absolute_y = int(relative_y * image_height / scale_factor)
+                    absolute_x = int(relative_x * image_width / scale_factor_x)
+                    absolute_y = int(relative_y * image_height / scale_factor_y)
 
                     logger.debug(
                         f"Coordinate conversion: relative ({relative_x}, {relative_y}) -> absolute ({absolute_x}, {absolute_y})"
@@ -135,10 +142,10 @@ def parse_response_to_action(
                     relative_start_x, relative_start_y = start_coord[0], start_coord[1]
                     relative_end_x, relative_end_y = end_coord[0], end_coord[1]
 
-                    absolute_start_x = int(relative_start_x * image_width / scale_factor)
-                    absolute_start_y = int(relative_start_y * image_height / scale_factor)
-                    absolute_end_x = int(relative_end_x * image_width / scale_factor)
-                    absolute_end_y = int(relative_end_y * image_height / scale_factor)
+                    absolute_start_x = int(relative_start_x * image_width / scale_factor_x)
+                    absolute_start_y = int(relative_start_y * image_height / scale_factor_y)
+                    absolute_end_x = int(relative_end_x * image_width / scale_factor_x)
+                    absolute_end_y = int(relative_end_y * image_height / scale_factor_y)
 
                     logger.debug(
                         f"Drag coordinate conversion: relative ({relative_start_x}, {relative_start_y}) -> ({relative_end_x}, {relative_end_y}) | absolute ({absolute_start_x}, {absolute_start_y}) -> ({absolute_end_x}, {absolute_end_y})"
@@ -216,6 +223,8 @@ class GeneralE2EAgentMCP(MCPAgent):
         self.observation_type = observation_type
         self.runtime_conf = runtime_conf
         self.scale_factor = scale_factor
+        if "claude" in self.model_name.lower():
+            self.scale_factor = CLAUDE_IMAGE_SIZE
 
         logger.debug(f"Agent runtime_conf = {self.runtime_conf}")
         logger.debug(f"Agent scale_factor = {self.scale_factor}")
@@ -297,7 +306,12 @@ class GeneralE2EAgentMCP(MCPAgent):
             Tuple of (raw_response, JSONAction)
         """
 
-        obs_image = observation["screenshot"]
+        # resize for claude
+        orig_width, orig_height = observation["screenshot"].size
+        if "claude" in self.model_name.lower():
+            obs_image = observation["screenshot"].resize(CLAUDE_IMAGE_SIZE)
+        else:
+            obs_image = observation["screenshot"]
         tool_call = observation.get("tool_call", None)
         ask_user_response = observation.get("ask_user_response", None)
 
@@ -378,14 +392,13 @@ class GeneralE2EAgentMCP(MCPAgent):
         if action_str is None:
             return "Agent LLM failed", JSONAction(action_type="unknown", text="Agent LLM failed")
 
-        # Get image dimensions for coordinate conversion
-        image_width, image_height = obs_image.size
-        logger.debug(f"Image size: {image_width}x{image_height}")
+        logger.debug(f"Image size: {orig_width}x{orig_height}")
 
         try:
             json_action_dict = parse_response_to_action(
-                action_str, image_width, image_height, self.scale_factor
+                action_str, orig_width, orig_height, self.scale_factor
             )
+
         except Exception as e:
             logger.error(f"Error parsing agent response: {e}")
             return "Agent LLM failed", JSONAction(action_type="unknown", text="Agent LLM failed")

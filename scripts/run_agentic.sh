@@ -4,6 +4,7 @@ sudo mw eval \
     --agent_type planner_executor \
     --task ALL \
     --max_round 50 \
+    --step_wait_time 3 \
     --model_name [planner_model_name] \
     --llm_base_url [planner_model_openai_base_url] \
     --executor_agent_class uiins \
