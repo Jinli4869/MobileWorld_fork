@@ -30,9 +30,7 @@ class SayHelloRoommatesAskUserTask2(BaseTask):
             roommate_info.append(f"The phone number of {name} is {phone}.")
 
         self.relevant_information = "My roommates information: " + " ".join(roommate_info)
-        self.relevant_information += (
-            "Only Ella and Grace are in the Contacts app. Catherine is not in the Contacts app."
-        )
+        self.relevant_information += "Only Ella and Grace are in the Contacts app. Catherine is not in the Contacts app so she should be added to the Contacts app first."
         logger.info(f"Task initialized with roommates: {', '.join(self.roommates.keys())}")
         return True
 

@@ -3,7 +3,10 @@ from datetime import datetime, timedelta, timezone
 import requests
 from loguru import logger
 
-from mobile_world.runtime.app_helpers.system import enable_auto_time_sync, reset_chrome
+from mobile_world.runtime.app_helpers.system import (
+    reset_chrome,
+    time_sync_to_now,
+)
 from mobile_world.runtime.controller import AndroidController
 from mobile_world.tasks.base import BaseTask
 
@@ -23,8 +26,7 @@ class ChromeSearchBeijingWeatherAskUserTask(BaseTask):
 
     def initialize_task_hook(self, controller: AndroidController) -> bool:
         try:
-            if not enable_auto_time_sync(controller):
-                return False
+            time_sync_to_now()
 
             reset_chrome(controller)
 

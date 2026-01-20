@@ -13,7 +13,7 @@ class SearchTopInfoAskUserTask(BaseTask):
 
     goal = (
         "Search for the recent news in the field I am interested, "
-        "and send an email to me with a subject line that includes the field name "
+        "and send an email to Kevin with a subject line that includes the field name "
         "and the following message:\n"
         "Here is the recent news in the [field name] field:\n"
         "[One sentence summary of the recent news you found]"
@@ -35,7 +35,7 @@ class SearchTopInfoAskUserTask(BaseTask):
 
             self.relevant_information = (
                 f"The field I am interested in is {self.interest_field}. "
-                f"My email address is {self.correct_recipient}."
+                f"Kevin's email address is {self.correct_recipient}."
                 f"I do not have any preferences for the news content. Just search for the most top information in the field recently."
             )
             return True
