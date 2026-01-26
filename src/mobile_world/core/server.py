@@ -367,8 +367,11 @@ def step(req: StepRequest):
 
         elif action_type == SCROLL:
             # Map scroll to swipe for compatibility
-            # scroll direction is reversed compared to swipe
-            direction = "down" if action.direction == "up" else "up"
+            if action.direction in ["left", "right"]:
+                direction = action.direction
+            else:
+                # scroll direction is reversed compared to swipe
+                direction = "down" if action.direction == "up" else "up"
             logger.info(
                 f"[STEP] Executing scroll: direction={action.direction}; equivalent to swipe {direction}"
             )
