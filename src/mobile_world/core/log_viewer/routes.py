@@ -17,11 +17,17 @@ from mobile_world.core.log_viewer.utils import (
     get_latest_screenshot,
     get_latest_trajectory_action,
     get_log_root_state,
+    get_screenshots,
     get_task_folders,
     get_task_goal,
     get_task_info,
     get_task_status,
     get_task_tags,
+    get_task_token_usage,
+    get_task_tools,
+    get_user_trajectory_folders,
+    get_user_trajectory_task_folder,
+    is_user_trajectory_log,
 )
 
 
@@ -343,6 +349,84 @@ def register_routes(rt):
             )
         return task_rows, filtered_count, total_count
 
+    def _process_user_trajectories_for_display(log_root, search_query=""):
+        """Process user trajectory logs for display (simplified, no metadata)."""
+        traj_folders = get_user_trajectory_folders(log_root)
+        task_rows = []
+        filtered_count = 0
+        total_count = len(traj_folders)
+
+        search_query_lower = search_query.lower().strip() if search_query else ""
+
+        for traj_id in traj_folders:
+            task_folder = get_user_trajectory_task_folder(log_root, traj_id)
+            trajectory_steps = get_all_trajectory_steps(task_folder)
+
+            if not trajectory_steps:
+                continue
+
+            # Search filter
+            if search_query_lower and search_query_lower not in traj_id.lower():
+                task_goal = get_task_goal(task_folder)
+                if search_query_lower not in task_goal.lower():
+                    continue
+
+            filtered_count += 1
+
+            latest_screenshot = get_latest_screenshot(task_folder)
+            latest_action = get_latest_trajectory_action(task_folder)
+            task_goal = get_task_goal(task_folder)
+
+            screenshot_url = None
+            if latest_screenshot:
+                filename, subfolder = latest_screenshot
+                screenshot_url = f"/static/user_screenshots/{traj_id}/{subfolder}/{filename.replace('.png', '')}?log_root={quote(log_root)}"
+
+            task_rows.append(
+                Tr(
+                    Td(
+                        Img(
+                            src=screenshot_url,
+                            cls="thumb",
+                            alt="Latest screenshot",
+                        )
+                        if screenshot_url
+                        else Span("No screenshot", style="color: #666;"),
+                        cls="col-screenshot",
+                    ),
+                    Td(
+                        A(
+                            traj_id,
+                            href=f"/user_task/{traj_id}?log_root={quote(log_root)}",
+                            target="_blank",
+                        ),
+                        cls="task-name-col",
+                    ),
+                    Td(_truncated_goal(task_goal, traj_id), cls="col-goal"),
+                    Td(
+                        str(latest_action["step"]) if latest_action else "N/A",
+                        cls="col-step",
+                    ),
+                    Td(
+                        latest_action["action_type"] if latest_action else "N/A",
+                        cls="col-action",
+                    ),
+                    Td(
+                        latest_action["prediction"][:100] + "..."
+                        if latest_action
+                        and latest_action.get("prediction")
+                        and len(latest_action["prediction"]) > 100
+                        else (
+                            latest_action["prediction"]
+                            if latest_action and latest_action.get("prediction")
+                            else ""
+                        ),
+                        cls="col-prediction",
+                    ),
+                )
+            )
+        return task_rows, filtered_count, total_count
+
     @rt("/static/screenshots/{task_name}/{subfolder}/{filename}")
     async def serve_screenshot(task_name: str, subfolder: str, filename: str, request):
         """Serve screenshot files from screenshots or marked_screenshots folder."""
@@ -367,6 +451,399 @@ def register_routes(rt):
             return "Screenshot not found", 404
 
         return FileResponse(screenshot_path)
+
+    @rt("/static/user_screenshots/{traj_id}/{subfolder}/{filename}")
+    async def serve_user_screenshot(traj_id: str, subfolder: str, filename: str, request):
+        """Serve screenshot files from user trajectory folders."""
+        filename = filename + ".png"
+        log_root_state = get_log_root_state()
+        log_root_raw = request.query_params.get("log_root") or log_root_state.get("log_root", "")
+        if not log_root_raw:
+            return "Log root not specified", 400
+
+        log_root = unquote(log_root_raw)
+        if not os.path.isabs(log_root):
+            log_root = os.path.abspath(log_root)
+
+        if subfolder not in ("screenshots", "marked_screenshots"):
+            return "Invalid subfolder", 400
+
+        task_folder = get_user_trajectory_task_folder(log_root, traj_id)
+        screenshot_path = os.path.join(task_folder, subfolder, filename)
+
+        if not os.path.exists(screenshot_path):
+            return "Screenshot not found", 404
+
+        return FileResponse(screenshot_path)
+
+    @rt("/user_task/{traj_id}")
+    def user_task_detail(traj_id: str, request):
+        """Display detailed information for a user trajectory (simplified, no metadata)."""
+        log_root_state = get_log_root_state()
+        log_root_raw = request.query_params.get("log_root") or log_root_state.get("log_root", "")
+        log_root = unquote(log_root_raw) if log_root_raw else ""
+
+        if not log_root:
+            return (
+                Titled("Error"),
+                Style(DARK_THEME_CSS),
+                Style(HTML_BODY_CSS),
+                Div("Log root not specified", cls="empty-state"),
+            )
+
+        task_folder = get_user_trajectory_task_folder(log_root, traj_id)
+        if not os.path.exists(task_folder):
+            return (
+                Titled("Trajectory Not Found"),
+                Style(DARK_THEME_CSS),
+                Style(HTML_BODY_CSS),
+                Div(f"Trajectory '{traj_id}' not found", cls="empty-state"),
+            )
+
+        screenshots = get_screenshots(task_folder)
+        trajectory_steps = get_all_trajectory_steps(task_folder)
+        task_goal = get_task_goal(task_folder)
+        tools = get_task_tools(task_folder)
+        token_usage = get_task_token_usage(task_folder)
+
+        # Build gallery items
+        gallery_items = []
+        step_map = {step.get("step", -1): step for step in trajectory_steps}
+        steps_data = []
+
+        for i, (step_num, screenshot_file, subfolder) in enumerate(screenshots):
+            step_data = step_map.get(step_num, {})
+            action = step_data.get("action", {})
+            action_type = action.get("action_type", "N/A")
+            prediction = step_data.get("prediction", "")
+            screenshot_url = f"/static/user_screenshots/{traj_id}/{subfolder}/{screenshot_file.replace('.png', '')}?log_root={quote(log_root)}"
+
+            next_step_data = step_map.get(step_num + 1, {})
+            ask_user_response = next_step_data.get("ask_user_response")
+            tool_call = next_step_data.get("tool_call")
+
+            step_info = {
+                "index": i,
+                "step_num": step_num,
+                "action_type": action_type,
+                "prediction": prediction,
+                "screenshot_url": screenshot_url,
+                "ask_user_response": ask_user_response,
+                "tool_call": tool_call,
+            }
+            steps_data.append(step_info)
+
+            gallery_items.append(
+                Div(
+                    Img(
+                        src=screenshot_url,
+                        cls="gallery-thumb",
+                        alt=f"Step {step_num}",
+                        loading="lazy",
+                    ),
+                    Div(
+                        Span(f"Step {step_num}", cls="gallery-step-num"),
+                        Span(action_type, cls="gallery-action-type"),
+                        cls="gallery-item-info",
+                    ),
+                    cls="gallery-item" + (" selected" if i == 0 else ""),
+                    id=f"gallery-item-{i}",
+                    data_step_index=str(i),
+                    onclick=f"selectStep({i})",
+                )
+            )
+
+        steps_data_json = json.dumps(steps_data, ensure_ascii=False)
+        steps_data_json = (
+            steps_data_json.replace("</script>", "<\\/script>")
+            .replace("</Script>", "<\\/Script>")
+            .replace("</SCRIPT>", "<\\/SCRIPT>")
+            .replace("<!--", "<\\!--")
+        )
+
+        script = Script(f"""
+            const stepsData = {steps_data_json};
+            let currentStep = 0;
+
+            function escapeHtml(text) {{
+                if (!text) return '';
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }}
+
+            function selectStep(index) {{
+                if (index < 0 || index >= stepsData.length) return;
+
+                document.querySelectorAll('.gallery-item').forEach((item, i) => {{
+                    item.classList.toggle('selected', i === index);
+                }});
+
+                currentStep = index;
+                const step = stepsData[index];
+
+                const panelTitle = document.getElementById('panel-title');
+                const panelContent = document.getElementById('panel-content');
+                const prevBtn = document.getElementById('prev-step');
+                const nextBtn = document.getElementById('next-step');
+
+                panelTitle.textContent = 'Step ' + step.step_num;
+
+                let html = `
+                    <div class="detail-group">
+                        <label>Action Type</label>
+                        <div class="font-mono">${{escapeHtml(step.action_type)}}</div>
+                    </div>
+                `;
+
+                if (step.prediction) {{
+                    html += `
+                        <div class="detail-group">
+                            <label>Prediction</label>
+                            <div class="prediction-box">${{escapeHtml(step.prediction)}}</div>
+                        </div>
+                    `;
+                }}
+
+                if (step.ask_user_response) {{
+                    html += `
+                        <div class="detail-group">
+                            <label>Ask User Response</label>
+                            <div class="prediction-box">${{escapeHtml(step.ask_user_response)}}</div>
+                        </div>
+                    `;
+                }}
+
+                if (step.tool_call) {{
+                    const toolCallStr = typeof step.tool_call === 'object'
+                        ? JSON.stringify(step.tool_call, null, 2)
+                        : String(step.tool_call);
+                    html += `
+                        <div class="detail-group">
+                            <label>Tool Call</label>
+                            <pre class="prediction-box font-mono">${{escapeHtml(toolCallStr)}}</pre>
+                        </div>
+                    `;
+                }}
+
+                panelContent.innerHTML = html;
+
+                if (prevBtn) prevBtn.disabled = currentStep === 0;
+                if (nextBtn) nextBtn.disabled = currentStep === stepsData.length - 1;
+            }}
+
+            document.addEventListener('DOMContentLoaded', () => {{
+                if (stepsData.length > 0) {{
+                    selectStep(0);
+                }}
+
+                document.getElementById('prev-step')?.addEventListener('click', () => {{
+                    selectStep(currentStep - 1);
+                }});
+
+                document.getElementById('next-step')?.addEventListener('click', () => {{
+                    selectStep(currentStep + 1);
+                }});
+
+                document.addEventListener('keydown', (e) => {{
+                    if (document.activeElement.tagName === 'INPUT') return;
+                    if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {{
+                        selectStep(currentStep - 1);
+                        e.preventDefault();
+                    }} else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {{
+                        selectStep(currentStep + 1);
+                        e.preventDefault();
+                    }}
+                }});
+            }});
+        """)
+
+        return (
+            Style(DARK_THEME_CSS),
+            Style(HTML_BODY_CSS),
+            Div(
+                # Header with task info (simplified)
+                Div(
+                    Div(
+                        A(
+                            "← Back to Trajectory List",
+                            href=f"/?log_root={quote(log_root)}",
+                        ),
+                        cls="back-nav",
+                    ),
+                    H1(f"Trajectory: {traj_id}"),
+                    Div(
+                        Div(
+                            Span("Goal", cls="meta-label"),
+                            Span(task_goal if task_goal else "N/A", cls="meta-value"),
+                            cls="meta-item",
+                        ),
+                        Div(
+                            Span("Steps", cls="meta-label"),
+                            Span(str(len(trajectory_steps)), cls="meta-value"),
+                            cls="meta-item",
+                        ),
+                        Div(
+                            Span("Tools", cls="meta-label"),
+                            A(
+                                f"{len(tools)} tools",
+                                href="#",
+                                cls="meta-value tools-link",
+                                onclick="document.getElementById('tools-modal').style.display='flex'; return false;",
+                            )
+                            if tools
+                            else Span("-", cls="meta-value"),
+                            cls="meta-item",
+                        )
+                        if tools
+                        else None,
+                        Div(
+                            Span("Token Usage", cls="meta-label"),
+                            A(
+                                "View",
+                                href="#",
+                                cls="meta-value tools-link",
+                                onclick="document.getElementById('token-usage-modal').style.display='flex'; return false;",
+                            )
+                            if token_usage
+                            else Span("-", cls="meta-value"),
+                            cls="meta-item",
+                        )
+                        if token_usage
+                        else None,
+                        cls="detail-meta-grid",
+                    ),
+                    cls="detail-header",
+                ),
+                # Main content: waterfall gallery left, detail panel right
+                Div(
+                    Div(
+                        Div(
+                            *gallery_items
+                            if gallery_items
+                            else [Div("No steps available", cls="empty-state")],
+                            cls="gallery-grid",
+                        ),
+                        cls="steps-gallery",
+                    ),
+                    Div(
+                        Div(
+                            Span("Step Details", cls="detail-panel-title", id="panel-title"),
+                            Div(
+                                Button(
+                                    "←",
+                                    id="prev-step",
+                                    cls="nav-btn",
+                                    disabled=True,
+                                    title="Previous step",
+                                ),
+                                Button("→", id="next-step", cls="nav-btn", title="Next step"),
+                                cls="detail-nav",
+                            ),
+                            cls="detail-panel-header",
+                        ),
+                        Div(
+                            Div("Select a step to view details", cls="detail-panel-empty")
+                            if not gallery_items
+                            else None,
+                            cls="detail-panel-content",
+                            id="panel-content",
+                        ),
+                        cls="detail-panel",
+                    ),
+                    cls="detail-main",
+                ),
+                # Tools modal
+                Div(
+                    Div(
+                        Div(
+                            Span("Available Tools", cls="modal-title"),
+                            Button(
+                                "×",
+                                cls="modal-close",
+                                onclick="document.getElementById('tools-modal').style.display='none';",
+                            ),
+                            cls="modal-header",
+                        ),
+                        Div(
+                            *[
+                                Div(
+                                    Div(
+                                        Span(tool.get("name", "Unknown"), cls="tool-name"),
+                                        cls="tool-header",
+                                    ),
+                                    Div(
+                                        tool.get("description", "No description"),
+                                        cls="tool-description",
+                                    ),
+                                    Div(
+                                        Pre(
+                                            json.dumps(
+                                                tool.get("inputSchema", {}),
+                                                indent=2,
+                                                ensure_ascii=False,
+                                            ),
+                                            cls="tool-schema",
+                                        ),
+                                        cls="tool-schema-container",
+                                    )
+                                    if tool.get("inputSchema")
+                                    else None,
+                                    cls="tool-item",
+                                )
+                                for tool in tools
+                            ]
+                            if tools
+                            else [Div("No tools available", cls="empty-state")],
+                            cls="modal-body",
+                        ),
+                        cls="modal-content",
+                    ),
+                    id="tools-modal",
+                    cls="modal-overlay",
+                    style="display: none;",
+                    onclick="if(event.target === this) this.style.display='none';",
+                )
+                if tools
+                else None,
+                # Token Usage modal
+                Div(
+                    Div(
+                        Div(
+                            Span("Token Usage", cls="modal-title"),
+                            Button(
+                                "×",
+                                cls="modal-close",
+                                onclick="document.getElementById('token-usage-modal').style.display='none';",
+                            ),
+                            cls="modal-header",
+                        ),
+                        Div(
+                            *[
+                                Div(
+                                    Span(key.replace("_", " ").title(), cls="token-usage-label"),
+                                    Span(f"{value:,}", cls="token-usage-value"),
+                                    cls="token-usage-item",
+                                )
+                                for key, value in token_usage.items()
+                            ]
+                            if token_usage
+                            else [Div("No token usage data available", cls="empty-state")],
+                            cls="modal-body token-usage-body",
+                        ),
+                        cls="modal-content modal-content-small",
+                    ),
+                    id="token-usage-modal",
+                    cls="modal-overlay",
+                    style="display: none;",
+                    onclick="if(event.target === this) this.style.display='none';",
+                )
+                if token_usage
+                else None,
+                script,
+                cls="detail-page",
+            ),
+        )
 
     @rt("/task/{task_name}")
     def task_detail(task_name: str, request):
@@ -750,6 +1227,50 @@ def register_routes(rt):
             ),
         )
 
+    def _build_user_trajectory_pagination(
+        current_page: int,
+        total_pages: int,
+        log_root: str,
+        search_query: str = "",
+    ) -> Div:
+        """Build pagination controls for user trajectories."""
+        if total_pages <= 1:
+            return Div()
+
+        def page_link(page_num: int, label: str, is_current: bool = False, disabled: bool = False):
+            if disabled:
+                return Span(label, cls="page-link disabled")
+            if is_current:
+                return Span(label, cls="page-link current")
+            return A(
+                label,
+                href=f"/?log_root={quote(log_root)}&search_query={quote(search_query)}&page={page_num}",
+                cls="page-link",
+            )
+
+        items = []
+        items.append(page_link(current_page - 1, "« Prev", disabled=current_page <= 1))
+
+        if total_pages <= 7:
+            for i in range(1, total_pages + 1):
+                items.append(page_link(i, str(i), is_current=i == current_page))
+        else:
+            items.append(page_link(1, "1", is_current=current_page == 1))
+            if current_page > 3:
+                items.append(Span("...", cls="page-ellipsis"))
+            start = max(2, current_page - 1)
+            end = min(total_pages - 1, current_page + 1)
+            for i in range(start, end + 1):
+                items.append(page_link(i, str(i), is_current=i == current_page))
+            if current_page < total_pages - 2:
+                items.append(Span("...", cls="page-ellipsis"))
+            items.append(
+                page_link(total_pages, str(total_pages), is_current=current_page == total_pages)
+            )
+
+        items.append(page_link(current_page + 1, "Next »", disabled=current_page >= total_pages))
+        return Div(*items, cls="pagination")
+
     @rt("/")
     def index(request):
         """Main page showing all tasks."""
@@ -764,10 +1285,6 @@ def register_routes(rt):
             if log_root:
                 logger.info(f"Retrieved log root from state: {log_root}")
 
-        # Filters
-        status_filter = request.query_params.get("status_filter", "all")
-        score_filter = request.query_params.get("score_filter", "all")
-        tag_filter = request.query_params.get("tag_filter", "all")
         search_query = request.query_params.get("search_query", "")
 
         # Pagination
@@ -775,6 +1292,138 @@ def register_routes(rt):
             current_page = max(1, int(request.query_params.get("page", "1")))
         except ValueError:
             current_page = 1
+
+        current_time = time.strftime("%Y-%m-%d %H:%M:%S")
+
+        # Check if this is a user trajectory log
+        is_user_traj = log_root and is_user_trajectory_log(log_root)
+
+        if is_user_traj:
+            # User trajectory mode - simplified view
+            task_rows = []
+            filtered_count = 0
+            total_count = 0
+            total_pages = 1
+
+            task_rows, filtered_count, total_count = _process_user_trajectories_for_display(
+                log_root, search_query
+            )
+            total_pages = max(1, (filtered_count + ITEMS_PER_PAGE - 1) // ITEMS_PER_PAGE)
+            current_page = min(current_page, total_pages)
+            start_idx = (current_page - 1) * ITEMS_PER_PAGE
+            end_idx = start_idx + ITEMS_PER_PAGE
+            task_rows = task_rows[start_idx:end_idx]
+
+            return (
+                Style(DARK_THEME_CSS),
+                Div(
+                    # Header
+                    Div(
+                        Div(
+                            H1("📱 MobileWorld Trajectory Viewer"),
+                            Div(
+                                f"Last Updated: {current_time}",
+                                cls="last-update",
+                                id="last-update-time",
+                            ),
+                            cls="app-title",
+                        ),
+                        cls="app-header",
+                    ),
+                    # Controls (simplified)
+                    Div(
+                        Form(
+                            Div(
+                                Div(
+                                    Label("Log Root"),
+                                    Input(
+                                        type="text",
+                                        name="log_root",
+                                        value=log_root,
+                                        placeholder="e.g., traj_logs/glm01",
+                                        hx_get="/",
+                                        hx_target="body",
+                                        hx_trigger="keyup changed delay:500ms",
+                                        hx_swap="outerHTML",
+                                        hx_include="[name='search_query']",
+                                    ),
+                                    cls="input-group-item input-group-wide",
+                                ),
+                                Div(
+                                    Label("Search"),
+                                    Input(
+                                        type="text",
+                                        name="search_query",
+                                        value=search_query,
+                                        placeholder="Filter by ID or goal...",
+                                        hx_get="/",
+                                        hx_target="body",
+                                        hx_trigger="keyup changed delay:300ms",
+                                        hx_swap="outerHTML",
+                                        hx_include="[name='log_root']",
+                                    ),
+                                    cls="input-group-item",
+                                ),
+                                cls="input-row",
+                            ),
+                            Input(type="hidden", name="page", value=str(current_page)),
+                            cls="controls-section",
+                        ),
+                    ),
+                    # Content (Table only, no stats)
+                    Div(
+                        Div(
+                            H2(
+                                f"Trajectories ({filtered_count}/{total_count}) - Page {current_page}/{total_pages}"
+                            ),
+                            Div(
+                                Table(
+                                    Thead(
+                                        Tr(
+                                            Th("Screenshot"),
+                                            Th("ID"),
+                                            Th("Goal"),
+                                            Th("Step"),
+                                            Th("Action"),
+                                            Th("Prediction"),
+                                        )
+                                    ),
+                                    Tbody(
+                                        *task_rows
+                                        if task_rows
+                                        else [
+                                            Tr(
+                                                Td(
+                                                    "No trajectories found",
+                                                    colspan=6,
+                                                    style="text-align: center; padding: 40px; color: var(--text-secondary);",
+                                                )
+                                            )
+                                        ]
+                                    ),
+                                    cls="task-table",
+                                ),
+                                cls="table-container",
+                            ),
+                            _build_user_trajectory_pagination(
+                                current_page,
+                                total_pages,
+                                log_root,
+                                search_query,
+                            )
+                            if total_pages > 1
+                            else None,
+                        ),
+                        id="refreshable-content",
+                    ),
+                    cls="container",
+                ),
+            )
+
+        # Standard task log mode
+        status_filter = request.query_params.get("status_filter", "all")
+        score_filter = request.query_params.get("score_filter", "all")
+        tag_filter = request.query_params.get("tag_filter", "all")
 
         # Auto-refresh
         if "log_root" in request.query_params:
@@ -827,8 +1476,6 @@ def register_routes(rt):
             start_idx = (current_page - 1) * ITEMS_PER_PAGE
             end_idx = start_idx + ITEMS_PER_PAGE
             task_rows = task_rows[start_idx:end_idx]
-
-        current_time = time.strftime("%Y-%m-%d %H:%M:%S")
 
         return (
             # Titled("MobileWorld Log Viewer"),

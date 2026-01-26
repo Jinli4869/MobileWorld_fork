@@ -369,6 +369,7 @@ COMMON_APP_MAPPER = {
     "com.videogo": "萤石云视频",
     "de.danoeh.antennapod": "AntennaPod",
     "com.baidu.netdisk": "百度网盘",
+    "com.baidu.BaiduMap": "百度地图",
     "com.taobao.taobao": "淘宝",
     "com.sgcc.wsgw.cn": "网上国网",
     "com.xiaomi.smarthome": "米家",

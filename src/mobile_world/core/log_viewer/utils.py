@@ -98,6 +98,48 @@ def get_task_folders(log_root: str) -> list[str]:
     return sorted(task_folders)
 
 
+def is_user_trajectory_log(log_root: str) -> bool:
+    """Check if the log root contains user trajectory logs (id_X/user_task/ structure)."""
+    if not log_root or not os.path.exists(log_root):
+        return False
+
+    for item in os.listdir(log_root):
+        item_path = os.path.join(log_root, item)
+        if os.path.isdir(item_path) and item.startswith("id_"):
+            user_task_path = os.path.join(item_path, "user_task")
+            if os.path.isdir(user_task_path):
+                return True
+    return False
+
+
+def get_user_trajectory_folders(log_root: str) -> list[str]:
+    """Get all user trajectory folders (id_X) from log root."""
+    if not log_root or not os.path.exists(log_root):
+        return []
+
+    folders = []
+    for item in os.listdir(log_root):
+        item_path = os.path.join(log_root, item)
+        if os.path.isdir(item_path) and item.startswith("id_"):
+            user_task_path = os.path.join(item_path, "user_task")
+            if os.path.isdir(user_task_path):
+                folders.append(item)
+
+    # Sort by numeric id
+    def extract_id(name: str) -> int:
+        try:
+            return int(name.replace("id_", ""))
+        except ValueError:
+            return 0
+
+    return sorted(folders, key=extract_id)
+
+
+def get_user_trajectory_task_folder(log_root: str, traj_id: str) -> str:
+    """Get the actual task folder for a user trajectory (log_root/id_X/user_task)."""
+    return os.path.join(log_root, traj_id, "user_task")
+
+
 def get_screenshots(task_folder: str) -> list[tuple[int, str, str]]:
     """Get all screenshots from the task folder, sorted by step number.
 
