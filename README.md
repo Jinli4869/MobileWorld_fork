@@ -44,8 +44,10 @@ While maintaining the same level of rigorous, reproducible evaluation as Android
 ## 📢 Updates
 - **2026-01-16: Expanded Model Evaluation Support🔥**
     We have introduced evaluation implementations for the latest frontier models, covering both end-to-end and agentic workflows.
-    * 🏆 **New Leaderboard Records:** **Seed-1.8** has secured the top-1 spot for end-to-end model performance on GUI-only tasks with a **52.1% success rate**, followed by **Gemini-3-Pro** at **51.3%** and **Claude-4.5-Sonnet** at **47.8%**.
-    * 🚀 **Enhanced Comparison:** We now support focused comparisons within the **GUI-only category**. This accounts for models not yet optimized for user interaction or MCP-hybrid tool calls, providing a more balanced assessment of core GUI navigation capabilities.
+    * 🚀 **Leaderboard Upgrade with Multi-Dimensional Filtering:** We now support focused comparisons within **GUI-Only** and **User-Interaction** categories. This allows for a more balanced assessment of core navigation capabilities, especially for models not yet optimized for MCP-hybrid tool calls or complex user dialogues.
+    * 🏆 **New Performance Records:**
+        * **GUI-Only Tasks:** **Seed-1.8** secured the Top-1 spot for end-to-end performance with a **52.1%** success rate, followed by **Gemini-3-Pro** (**51.3%**) and **Claude-4.5-Sonnet** (**47.8%**).
+        * **Combined GUI & User Interaction:** **MAI-UI-235B-A22B** leads the leaderboard with a **45.4%** success rate, surpassing **Claude-4.5-Sonnet** (**43.2%**) and **Seed-1.8** (**40.8%**).    
     * **Supported Models:**
         * **End-to-End:** Gemini-3-Pro, Claude-4.5-sonnet, and Seed-1.8.
         * **Agentic:** Gemini-3-Pro, Claude-4.5-sonnet, GPT-5, MAI-UI, and GELab-Zero.
