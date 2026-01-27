@@ -42,8 +42,20 @@ While maintaining the same level of rigorous, reproducible evaluation as Android
 </p>
 
 ## 📢 Updates
-- **2026-01-16**: New agent implementations: [MAI-UI](https://tongyi-mai.github.io/MAI-UI/), [Gemini-3-Pro](https://deepmind.google/models/gemini/pro/) (general end-to-end), [Seed-1.8](https://seed.bytedance.com/en/seed1_8), [GELab-Zero](https://arxiv.org/abs/2512.15431). New [leaderboard records](https://tongyi-mai.github.io/MobileWorld/#leaderboard): Seed-1.8 and Gemini-3-Pro in end-to-end category.
-- **2025-12-29**: We released [MAI-UI](https://tongyi-mai.github.io/MAI-UI/)🔥, achieving SOTA performance with a 41.7% success rate in the end-to-end models category on the MobileWorld benchmark.
+- **2026-01-16: Expanded Model Evaluation Support🔥**
+    We have introduced evaluation implementations for the latest frontier models, covering both end-to-end and agentic workflows.
+    * 🏆 **New Leaderboard Records:** **Seed-1.8** has secured the top-1 spot for end-to-end model performance on GUI-only tasks with a **52.1% success rate**, followed by **Gemini-3-Pro** at **51.3%** and **Claude-4.5-Sonnet** at **47.8%**.
+    * 🚀 **Enhanced Comparison:** We now support focused comparisons within the **GUI-only category**. This accounts for models not yet optimized for user interaction or MCP-hybrid tool calls, providing a more balanced assessment of core GUI navigation capabilities.
+    * **Supported Models:**
+        * **End-to-End:** Gemini-3-Pro, Claude-4.5-sonnet, and Seed-1.8.
+        * **Agentic:** Gemini-3-Pro, Claude-4.5-sonnet, GPT-5, MAI-UI, and GELab-Zero.
+    * **Implementation Details:**
+        * [**MAI-UI**](https://tongyi-mai.github.io/MAI-UI/) ([code](src/mobile_world/agents/implementations/mai_ui_agent.py))
+        * [**Gemini-3-Pro**](https://deepmind.google/models/gemini/pro/): End-to-end version adapted from our agentic framework utilizing Gemini’s built-in grounding ([code](src/mobile_world/agents/implementations/general_e2e_agent.py)).
+        * [**Seed-1.8**](https://seed.bytedance.com/en/seed1_8): Adapted from [OSWorld](https://github.com/xlang-ai/OSWorld/blob/main/mm_agents/seed_agent.py) for mobile action spaces, as GUI capability is not yet officially supported ([code](src/mobile_world/agents/implementations/seed_agent.py)).
+        * [**GELab-Zero**](https://arxiv.org/abs/2512.15431) ([code](src/mobile_world/agents/implementations/gelab_agent.py)).
+    * **Note on GPT-5:** While supported for agentic tasks, **GPT-5** is currently excluded from end-to-end evaluation as its grounding mechanisms remain unclear for standardized testing.
+- **2025-12-29**: We released [MAI-UI](https://tongyi-mai.github.io/MAI-UI/), achieving SOTA performance with a 41.7% success rate in the end-to-end models category on the MobileWorld benchmark.
 - **2025-12-23**: Initial release of MobileWorld benchmark. Check out our [paper](https://arxiv.org/abs/2512.19432) and [website](https://tongyi-mai.github.io/MobileWorld/)🔥.
 - **2025-12-23**: Docker image `ghcr.io/Tongyi-MAI/mobile_world:latest` available for public use.
 
