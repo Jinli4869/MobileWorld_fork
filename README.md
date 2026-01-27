@@ -36,7 +36,7 @@ While maintaining the same level of rigorous, reproducible evaluation as Android
 - 🔧 **MCP-Augmented Tasks**: Support Model Context Protocol (MCP) to evaluate hybrid tool usage
 
 <p align="center">
-  <img src="./assets/compare_to_aw.jpg" alt="Comparison to AndroidWorld" width="800">
+  <img src="./assets/compare_to_aw_v1.png" alt="Comparison to AndroidWorld" width="800">
   <br>
   <em>Difficulty comparison between MobileWorld and AndroidWorld</em>
 </p>
