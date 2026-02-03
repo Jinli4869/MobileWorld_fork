@@ -247,6 +247,7 @@ def run_agent_with_evaluation(
     env_image: str = "mobile_world",
     dry_run: bool = False,
     enable_mcp: bool = False,
+    enable_user_interaction: bool = False,
     max_concurrency: int | None = None,
     shuffle_tasks: bool = False,
     **kwargs,
@@ -293,7 +294,7 @@ def run_agent_with_evaluation(
     if len(tasks) != 0:
         task_list = tasks
     else:
-        task_list = envs[0].get_suite_task_list(enable_mcp=enable_mcp)
+        task_list = envs[0].get_suite_task_list(enable_mcp=enable_mcp, enable_user_interaction=enable_user_interaction)
 
     logger.info("Task list: {} ({} tasks)", task_list, len(task_list))
 

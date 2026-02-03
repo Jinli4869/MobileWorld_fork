@@ -126,6 +126,13 @@ def _add_common_arguments(parser: argparse.ArgumentParser) -> None:
         help="Enable MCP server",
     )
     parser.add_argument(
+        "--enable-user-interaction",
+        "--enable_user_interaction",
+        dest="enable_user_interaction",
+        action="store_true",
+        help="Enable user interaction tasks (agent-user-interaction). Default: only GUI-only tasks",
+    )
+    parser.add_argument(
         "--scale-factor",
         "--scale_factor",
         dest="scale_factor",
@@ -220,6 +227,7 @@ async def execute(args: argparse.Namespace) -> None:
         env_image=args.env_image,
         dry_run=args.dry_run,
         enable_mcp=args.enable_mcp,
+        enable_user_interaction=args.enable_user_interaction,
         max_concurrency=args.max_concurrency,
         shuffle_tasks=args.shuffle_tasks,
         scale_factor=getattr(args, "scale_factor", 1000),

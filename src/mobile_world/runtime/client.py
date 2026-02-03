@@ -175,21 +175,36 @@ class AndroidEnvClient:
             ask_user_response=ask_user_response,
         )
 
-    def get_suite_task_list(self, enable_mcp: bool = False) -> list[str]:
-        """Gets the list of tasks in the suite."""
+    def get_suite_task_list(self, enable_mcp: bool = False, enable_user_interaction: bool = False) -> list[str]:
+        """Gets the list of tasks in the suite.
+        
+        Args:
+            enable_mcp: If True, include agent-mcp tasks. Default False excludes them.
+            enable_user_interaction: If True, include agent-user-interaction tasks. Default False excludes them.
+        
+        Returns:
+            List of task names filtered by the specified criteria.
+            By default (both False), returns only GUI-only tasks.
+        """
         self._ensure_initialized()
 
         response = requests.get(f"{self.base_url}/task/list")
         response.raise_for_status()
         task_list = response.json()
-        if enable_mcp:
-            task_list = [task["name"] for task in task_list]
-        else:
-            task_list = [
-                task["name"] for task in task_list if "agent-mcp" not in task["tags"]
-            ]  # exclude agent-mcp tasks
-
-        return task_list
+        
+        # Filter tasks based on tags
+        filtered_tasks = []
+        gui_only = []
+        for task in task_list:
+            tags = task.get("tags", [])
+            # Skip agent-mcp tasks if not enabled
+            if not enable_mcp and "agent-mcp" in tags:
+                continue
+            # Skip agent-user-interaction tasks if not enabled
+            if not enable_user_interaction and "agent-user-interaction" in tags:
+                continue
+            filtered_tasks.append(task["name"])
+        return filtered_tasks
 
     def get_suite_task_length(self, task_type: str) -> int:
         """Gets the length of the suite of tasks."""
