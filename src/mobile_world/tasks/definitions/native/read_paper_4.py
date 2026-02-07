@@ -11,7 +11,8 @@ from mobile_world.tasks.base import BaseTask
 class ReadQwen3PaperTask4(BaseTask):
     """Read the Qwen3-Omini paper and answer a question about Vision encoder size."""
 
-    goal = "Read the downloaded Qwen3-Omni paper and tell me the size of Vision encoder in Qwen3-Omni-30B-A3B model. The answer should consist of only a single number representing the size in MB."
+    # goal = "Read the downloaded Qwen3-Omni paper and tell me the size of Vision encoder in Qwen3-Omni-30B-A3B model. The answer should consist of only a single number representing the size in MB."
+    goal = "Read the downloaded Qwen3-Omni paper and tell me the size of Vision encoder in Qwen3-Omni-30B-A3B model. Please provide only the numeric value in millions of parameters."
 
     # The correct answer for validation
     CORRECT_ANSWER = 540

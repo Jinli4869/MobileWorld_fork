@@ -8,8 +8,13 @@ from mobile_world.tasks.base import BaseTask
 
 
 class MastodonNewFilterTask(BaseTask):
+    # goal = (
+    #     "Add a new filter called “Anti-Spoiler-BCS”, "
+    #     "use all the words from the text file named filter_BCS in the documents "
+    #     "folder as blocked keywords, and set it to expire 5 days from today."
+    # )
     goal = (
-        "Add a new filter called “Anti-Spoiler-BCS”, "
+        "In Mastodon, add a new filter called “Anti-Spoiler-BCS”, "
         "use all the words from the text file named filter_BCS in the documents "
         "folder as blocked keywords, and set it to expire 5 days from today."
     )
