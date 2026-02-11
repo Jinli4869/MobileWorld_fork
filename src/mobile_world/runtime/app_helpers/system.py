@@ -73,13 +73,14 @@ def enable_auto_time_sync(controller: AndroidController) -> bool:
         f"adb -s {controller.device} shell settings put global auto_time_zone 1"
     )
 
-    if result_auto_time.success and result_auto_timezone.success:
+    time_sync_success = time_sync_to_now()
+    if result_auto_time.success and result_auto_timezone.success and time_sync_success:
         logger.info("✓ Automatic time synchronization enabled successfully")
         return True
     else:
         logger.warning(
             f"Failed to enable time sync: auto_time={result_auto_time.success}, "
-            f"auto_timezone={result_auto_timezone.success}"
+            f"auto_timezone={result_auto_timezone.success}, time_sync={time_sync_success}"
         )
         return False
 
