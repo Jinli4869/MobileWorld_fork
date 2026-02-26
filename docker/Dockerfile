@@ -88,4 +88,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:6800/health || exit 1
 
 ENTRYPOINT ["entrypoint.sh"]
-CMD tail -f /var/log/emulator.log /var/log/server.log
+CMD tail -f /var/log/emulator.log /var/log/server.log /var/log/dockerd.err.log
