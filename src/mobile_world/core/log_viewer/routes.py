@@ -683,6 +683,7 @@ def register_routes(rt, base_path: str = "/"):
         """)
 
         return (
+            Title(f"Trajectory: {traj_id}"),
             Style(DARK_THEME_CSS),
             Style(HTML_BODY_CSS),
             Div(
@@ -1063,6 +1064,7 @@ def register_routes(rt, base_path: str = "/"):
         """)
 
         return (
+            Title(f"Task: {unquote(task_name)}"),
             Style(DARK_THEME_CSS),
             Style(HTML_BODY_CSS),
             Div(
@@ -1558,7 +1560,7 @@ def register_routes(rt, base_path: str = "/"):
             task_rows = task_rows[start_idx:end_idx]
 
         return (
-            # Titled("MobileWorld Log Viewer"),
+            Title("📱 MobileWorld Log Viewer"),
             Style(DARK_THEME_CSS),
             Div(
                 # Header
