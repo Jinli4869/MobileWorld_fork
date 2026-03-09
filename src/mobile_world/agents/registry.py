@@ -18,6 +18,7 @@ from mobile_world.agents.implementations.planner_executor import PlannerExecutor
 from mobile_world.agents.implementations.qwen3vl import Qwen3VLAgentMCP
 from mobile_world.agents.implementations.seed_agent import SeedAgent
 from mobile_world.agents.implementations.ui_venus_agent import VenusNaviAgent
+from mobile_world.agents.implementations.gui_owl_1_5 import GUIOWL15AgentMCP
 
 AGENT_CONFIGS = {
     "qwen3vl": {
@@ -40,6 +41,9 @@ AGENT_CONFIGS = {
     },
     "ui_venus_agent": {
         "class": VenusNaviAgent,
+    },
+    "gui_owl_1_5": {
+        "class": GUIOWL15AgentMCP,
     },
 }
 

@@ -35,4 +35,21 @@ QWENVL2AW_ACTION_MAP = {
     "drag": DRAG,
 }
 
+
+GUIOWL2AW_ACTION_MAP = {
+    "click": CLICK,
+    "type": INPUT_TEXT,
+    "long_press": LONG_PRESS,
+    "scroll": SCROLL,
+    "back": NAVIGATE_BACK,
+    "home": NAVIGATE_HOME,
+    "enter": KEYBOARD_ENTER,
+    "answer": ANSWER,
+    "open": OPEN_APP,
+    "wait": WAIT,
+    "terminate": FINISHED,
+    "swipe": DRAG,
+    "interact": ASK_USER,
+}
+
 UIINS_ACTION_MAP = {"click": CLICK, "long_press": LONG_PRESS}

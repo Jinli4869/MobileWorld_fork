@@ -14,6 +14,48 @@ MAX_PIXELS = 16384 * 28 * 28
 MAX_RATIO = 200
 
 
+def add_period_robustly(text: str) -> str:
+    """
+    Append a period to the text if it does not already end with a punctuation mark.
+
+    The punctuation character is chosen based on the dominant language detected
+    in the text:
+      - Predominantly Chinese  → '。'
+      - Predominantly English (or balanced) → '.'
+
+    Args:
+        text: Input text string.
+
+    Returns:
+        The original text with a period appended if needed, or the original
+        text unchanged if it already ends with a recognised punctuation mark.
+        Returns the input as-is if it is empty, None, or not a string.
+    """
+    if not text or not isinstance(text, str):
+        return text
+
+    text = text.strip()
+    if not text:
+        return text
+
+ 
+    END_PUNCTUATIONS = {
+        '。', '！', '？', '…', '；',
+        '.', '!', '?', ';',
+        '~', '～', '》', '」', '』', '）', ')', ']', '}',
+    }
+
+    if text[-1] in END_PUNCTUATIONS:
+        return text
+
+    # Determine the dominant language by counting Chinese vs. ASCII-alpha characters.
+    chinese_count = sum(1 for ch in text if '\u4e00' <= ch <= '\u9fff')
+    english_count = sum(1 for ch in text if ch.isalpha() and ord(ch) < 128)
+
+    return text + ('。' if chinese_count > english_count else '.')
+
+
+
 def pil_to_base64(image) -> str:
     """Convert PIL image to base64 string."""
     if not isinstance(image, Image.Image):
