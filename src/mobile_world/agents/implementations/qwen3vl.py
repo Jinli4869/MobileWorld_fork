@@ -295,6 +295,8 @@ class Qwen3VLAgentMCP(MCPAgent):
                     logger.error(traceback.format_exc())
                     prediction = None
                     try_times -= 1
+                else:
+                    raise Exception("Failed to parse response after maximum retries")
 
         if parsed_response is None:
             return "llm parse error after multiple retries", JSONAction(action_type=ENV_FAIL)
