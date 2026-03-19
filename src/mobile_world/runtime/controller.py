@@ -13,10 +13,8 @@ from mobile_world.runtime.utils.helpers import (
 )
 from mobile_world.runtime.utils.models import APP_DICT, COMMON_APP_MAPPER
 
-APP_LOWER_DICT = {k.lower(): v for k, v in APP_DICT.items()}
-APP_LOWER_DICT.update(
-    {app_name.lower(): package_name for package_name, app_name in COMMON_APP_MAPPER.items()}
-)
+APP_LOWER_DICT = {app_name.lower(): package_name for package_name, app_name in COMMON_APP_MAPPER.items()}
+APP_LOWER_DICT.update({k.lower(): v for k, v in APP_DICT.items()})
 
 
 class AndroidController:
