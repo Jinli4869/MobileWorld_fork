@@ -1,0 +1,15 @@
+FROM ghcr.io/tongyi-mai/mobile_world:latest
+
+# Install socat (added after initial release for ADB port relay)
+RUN apt-get update && apt-get install -y --no-install-recommends socat && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Copy updated source code
+COPY src/ /app/service/src/
+
+# Copy updated entrypoint (adds socat ADB relay)
+COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+# Update CMD to also tail dockerd log
+CMD tail -f /var/log/emulator.log /var/log/server.log /var/log/dockerd.err.log
