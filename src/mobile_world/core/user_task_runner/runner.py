@@ -56,8 +56,7 @@ def _format_action(action) -> str:
     if action.x is not None and action.y is not None:
         parts.append(f"at ({action.x}, {action.y})")
     if action.text:
-        text_preview = action.text[:50] + "..." if len(action.text) > 50 else action.text
-        parts.append(f'text="{text_preview}"')
+        parts.append(f'text="{action.text}"')
     if action.direction:
         parts.append(f"direction={action.direction}")
     if action.app_name:
