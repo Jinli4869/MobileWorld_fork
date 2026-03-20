@@ -21,8 +21,8 @@
     <a href="https://opensource.org/licenses/Apache-2.0">
         <img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg">
     </a>
-    <a href="https://img.shields.io/badge/Python-3.12+-blue.svg">
-        <img src="https://img.shields.io/badge/Python-3.12+-blue.svg">
+    <a href="https://img.shields.io/badge/Python-3.12-blue.svg">
+        <img src="https://img.shields.io/badge/Python-3.12-blue.svg">
     </a>
 
 </p>
@@ -42,6 +42,16 @@ While maintaining the same level of rigorous, reproducible evaluation as Android
 </p>
 
 ## 📢 Updates
+- **2026-03-20: End-to-End Frontier Model Evaluation & Real Device Support🔥**
+    We benchmarked five frontier models — **Seed-2.0-Pro**, **Gemini 3 Pro**, **KIMI K2.5**, **Claude Sonnet 4.5**, and **Qwen-3.5** — for end-to-end mobile-use, and demonstrated real-phone execution. See our [blog post](https://tongyi-mai.github.io/MAI-UI-blog/MobileWorld-Blog-Post) for the full write-up.
+    * 🏆 **New SOTA:** **Seed-2.0-Pro** leads at **63.2%** GUI-Only and **61.4%** User-Interaction, overtaking Seed-1.8 as the top end-to-end model.
+    * 📊 **Expanded Leaderboard:**
+        * **KIMI K2.5** (49.6% GUI-Only, 51.2% User-Int)
+        * **Qwen-3.5-397B-A17B** (42.7% GUI-Only, 54.4% User-Int)
+        * **GUI-Owl-1.5-32B** (43.9% GUI-Only, 56.1% User-Int)
+        * **UI-Venus-1.5-30B** (17.1% GUI-Only)
+    * 📱 **Real Device Support:** You can now run frontier models on physical Android phones. See the [Testing on Real Devices](#-testing-on-real-devices) section.
+    * **New Agents:** `gui_owl_1_5` ([code](src/mobile_world/agents/implementations/gui_owl_1_5.py)), `ui_venus_agent` ([code](src/mobile_world/agents/implementations/ui_venus_agent.py))
 - **2026-01-16: Expanded Model Evaluation Support🔥**
     We have introduced evaluation implementations for the latest frontier models, covering both end-to-end and agentic workflows.
     * 🚀 **Leaderboard Upgrade with Multi-Dimensional Filtering:** We now support focused comparisons within **GUI-Only** and **User-Interaction** categories. This allows for a more balanced assessment of core navigation capabilities, especially for models not yet optimized for MCP-hybrid tool calls or complex user dialogues.
@@ -67,6 +77,7 @@ While maintaining the same level of rigorous, reproducible evaluation as Android
 - [Overview](#-overview)
 - [Installation](#-installation)
 - [Quick Start](#-quick-start)
+- [Testing on Real Devices](#-testing-on-real-devices)
 - [Available Commands](#-available-commands)
 - [Documentation](#-documentation)
 - [Benchmark Statistics](#-benchmark-statistics)
@@ -222,30 +233,120 @@ Opens an interactive web-based visualization at `http://localhost:8760` to explo
 
 ---
 
+## 📱 Testing on Real Devices
+
+Beyond the containerized emulator environment, MobileWorld supports running frontier models on **real physical Android phones**. This lets you evaluate models like Gemini, Claude, Qwen, and others as true end-to-end mobile agents.
+
+### Prerequisites
+
+- A physical Android phone connected via USB
+- ADB (Android Debug Bridge) installed on your local machine
+- An API key for the model you want to test
+
+### Step 1: Install ADB
+
+Download the official [ADB platform-tools](https://developer.android.com/tools/releases/platform-tools) and extract it.
+
+**macOS/Linux:**
+```bash
+# Assuming extracted to ~/Downloads/platform-tools
+export PATH=${PATH}:~/Downloads/platform-tools
+```
+
+**Windows:** Refer to [this guide](https://blog.csdn.net/x2584179909/article/details/108319973) for configuration steps.
+
+### Step 2: Connect Your Phone & Enable USB Debugging
+
+1. **Enable Developer Mode:** Go to *Settings > About Phone > Build Number* and tap rapidly ~10 times until you see "Developer mode has been enabled."
+2. **Enable USB Debugging:** Go to *Settings > Developer Options > USB Debugging* and enable it. Some devices may require a restart.
+3. **Verify the connection:**
+
+```bash
+adb devices
+
+# Expected output:
+# List of devices attached
+# <your_device_id>   device
+```
+
+### Step 3: Install ADB Keyboard (Optional)
+
+ADB Keyboard is needed for text input. Download the [ADBKeyboard.apk](https://github.com/senzhk/ADBKeyBoard/blob/master/ADBKeyboard.apk) and install it on your device:
+
+```bash
+adb install ADBKeyboard.apk
+adb shell ime enable com.android.adbkeyboard/.AdbIME
+```
+
+> **Note:** This step is optional — MobileWorld will install it automatically if not present.
+
+### Step 4: Clone MobileWorld
+
+```bash
+git clone https://github.com/Tongyi-MAI/MobileWorld.git
+cd MobileWorld
+uv sync
+```
+
+### Step 5: Start the MobileWorld Server
+
+```bash
+uv run mobile-world server
+```
+
+This starts the backend API server that bridges the model and the device.
+
+### Step 6: Run a Task on Your Real Device
+
+```bash
+uv run mw test "set an alarm at 8:00 am" \
+    --agent-type general_e2e \
+    --model_name anthropic/claude-sonnet-4-5 \
+    --llm_base_url https://openrouter.ai/api/v1 \
+    --aw-host http://127.0.0.1:6800 \
+    --api_key YOUR_API_KEY
+```
+
+Replace `--model_name`, `--llm_base_url`, and `--api_key` with the model and credentials you want to use. Any OpenAI-compatible endpoint works. The `--agent-type general_e2e` prompt works across most frontier models. For Seed-2.0-Pro, use `--agent-type seed_agent` for better performance.
+
+### Supported End-to-End Models
+
+| Model             | Agent Type    | Coordinate System | Notes                                         |
+|-------------------|---------------|-------------------|-----------------------------------------------|
+| Gemini 3 Pro      | `general_e2e` | Relative (0–1000) | Normalized coordinates                        |
+| Claude Sonnet 4.5 | `general_e2e` | Absolute pixels   | Requires image resize to 1280×720             |
+| Qwen-3.5          | `general_e2e` | Relative (0–1000) |                                               |
+| KIMI K2.5         | `general_e2e` | Relative (0–1)    |                                               |
+| Seed-2.0-Pro      | `seed_agent`  | Relative (0–1000) | Best with specialized `seed_agent` agent type |
+
+> **Tip:** You can view the live device screen at any time with `uv run mw device`.
+
+---
+
 ## 🔧 Available Commands
 
 MobileWorld provides a comprehensive CLI (`mw` or `mobile-world`) with the following commands:
 
-| Command | Description |
-|---------|-------------|
-| `mw env check` | Check prerequisites (Docker, KVM) and pull latest image |
-| `mw env run` | Launch Docker container(s) with Android emulators |
-| `mw env list` | List running MobileWorld containers |
-| `mw env rm` | Remove/destroy containers |
-| `mw env info` | Get detailed info about a container |
-| `mw env restart` | Restart the server in a container |
-| `mw env exec` | Open a shell in a container |
-| `mw eval` | Run benchmark evaluation suite |
-| `mw test` | Run a single ad-hoc task for testing |
-| `mw info task` | Display available tasks |
-| `mw info agent` | Display available agents |
-| `mw info app` | Display available apps |
-| `mw info mcp` | Display available MCP tools |
-| `mw logs view` | Launch interactive log viewer |
-| `mw logs results` | Print results summary table |
-| `mw logs export` | Export logs as static HTML site |
-| `mw device` | View live Android device screen |
-| `mw server` | Start the backend API server |
+| Command           | Description                                             |
+|-------------------|---------------------------------------------------------|
+| `mw env check`    | Check prerequisites (Docker, KVM) and pull latest image |
+| `mw env run`      | Launch Docker container(s) with Android emulators       |
+| `mw env list`     | List running MobileWorld containers                     |
+| `mw env rm`       | Remove/destroy containers                               |
+| `mw env info`     | Get detailed info about a container                     |
+| `mw env restart`  | Restart the server in a container                       |
+| `mw env exec`     | Open a shell in a container                             |
+| `mw eval`         | Run benchmark evaluation suite                          |
+| `mw test`         | Run a single ad-hoc task for testing                    |
+| `mw info task`    | Display available tasks                                 |
+| `mw info agent`   | Display available agents                                |
+| `mw info app`     | Display available apps                                  |
+| `mw info mcp`     | Display available MCP tools                             |
+| `mw logs view`    | Launch interactive log viewer                           |
+| `mw logs results` | Print results summary table                             |
+| `mw logs export`  | Export logs as static HTML site                         |
+| `mw device`       | View live Android device screen                         |
+| `mw server`       | Start the backend API server                            |
 
 Use `mw <command> --help` for detailed options.
 
@@ -255,11 +356,11 @@ Use `mw <command> --help` for detailed options.
 
 For detailed documentation, see the `docs/` directory:
 
-| Document | Description |
-|----------|-------------|
-| [Development Guide](docs/development.md) | Dev mode, debugging, container management workflows |
-| [MCP Setup](docs/mcp_setup.md) | Configure MCP servers for external tool integration |
-| [Windows Setup](docs/setup_for_windows.md) | WSL2 and KVM setup instructions for Windows |
+| Document                                   | Description                                         |
+|--------------------------------------------|-----------------------------------------------------|
+| [Development Guide](docs/development.md)   | Dev mode, debugging, container management workflows |
+| [MCP Setup](docs/mcp_setup.md)             | Configure MCP servers for external tool integration |
+| [Windows Setup](docs/setup_for_windows.md) | WSL2 and KVM setup instructions for Windows         |
 | [AVD Configuration](docs/configure_avd.md) | Customize and save Android Virtual Device snapshots |
 
 ---

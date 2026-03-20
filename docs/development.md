@@ -64,7 +64,7 @@ mobile-world env exec <container_name> --command "ls -la /app/service"
 
 1. **Launch container in dev mode:**
    ```bash
-   _dev_env
+   mobile-world env run --dev
    ```
 
 2. **Edit code locally** in your IDE/editor
@@ -82,7 +82,7 @@ mobile-world env exec <container_name> --command "ls -la /app/service"
    ```
 
 6. **Inside the container**, you can:
-   - Check logs: `tail -f /app/service/logs/server.log`, `tail -f /app/service/logs/server.log`, `tail -f /app/service/logs/server.log`
+   - Check logs: `tail -f /app/service/logs/server.log`
    - Inspect processes: `ps aux | grep mobile-world`
    - Debug with Python REPL: `uv run python`
    - Run tests: `cd /app/service && uv run pytest`
@@ -185,7 +185,7 @@ newgrp docker
 
 ## Advanced Usage
 
-### Enable VNC Without Dev Modemobile-world env run --dev --name-prefix my
+### Enable VNC Without Dev Mode
 
 You can enable VNC support on regular (non-dev) containers:
 ```bash
@@ -205,7 +205,7 @@ mobile-world env run --dev --image my_custom_image:latest
 
 Specify a different starting port:
 ```bash
-mobile-world env run --dev --start-port 8000
+mobile-world env run --dev --backend-start-port 8000
 ```
 
 ### Custom Name Prefix
