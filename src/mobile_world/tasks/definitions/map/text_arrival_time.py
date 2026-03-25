@@ -4,7 +4,7 @@ import re
 
 from loguru import logger
 
-from mobile_world.runtime.app_helpers.system import enable_auto_time_sync, reset_maps
+from mobile_world.runtime.app_helpers.system import reset_maps
 from mobile_world.runtime.controller import AndroidController
 from mobile_world.runtime.utils.helpers import execute_adb
 from mobile_world.tasks.base import BaseTask
@@ -32,51 +32,72 @@ class TextArrivalTimeTask(BaseTask):
             logger.error(f"Initialize Google Maps task failed: {e}")
             return False
 
-    def _parse_time_to_minutes(self, time_str: str) -> int | None:
-        """Parse time string to minutes from midnight. Supports: 8:30, 8:30pm, 20:30, etc."""
+    def _parse_all_times_to_minutes(self, text: str) -> list[int]:
+        """Parse all time strings in text to minutes from midnight."""
+        results = []
+        text_lower = text.lower()
+
         patterns = [
-            r"(\d{1,2}):(\d{2})\s*pm",  # 8:30pm, 8:30 pm
-            r"(\d{1,2}):(\d{2})\s*p\.m\.",  # 8:30 p.m.
-            r"(\d{1,2}):(\d{2})",  # 8:30 (assume PM)
+            (r"(\d{1,2}):(\d{2})\s*(?:pm|p\.m\.)", True),
+            (r"(\d{1,2}):(\d{2})\s*(?:am|a\.m\.)", False),
+            (r"(\d{1,2})\s*(?:pm|p\.m\.)", True),
+            (r"(\d{1,2})\s*(?:am|a\.m\.)", False),
         ]
 
-        for pattern in patterns:
-            match = re.search(pattern, time_str.lower())
-            if match:
+        matched_spans: list[tuple[int, int]] = []
+
+        for pattern, is_pm in patterns:
+            for match in re.finditer(pattern, text_lower):
+                if any(match.start() < end and match.end() > start for start, end in matched_spans):
+                    continue
+                matched_spans.append((match.start(), match.end()))
+
                 hours = int(match.group(1))
-                minutes = int(match.group(2))
+                minutes = int(match.group(2)) if match.lastindex >= 2 else 0
 
-                # Convert to 24h format
-                if "pm" in time_str.lower() or "p.m." in time_str.lower():
-                    if hours != 12:
-                        hours += 12
-                elif hours < 12:  # Assume PM
+                if is_pm and hours != 12:
                     hours += 12
+                elif not is_pm and hours == 12:
+                    hours = 0
 
-                return hours * 60 + minutes
+                results.append(hours * 60 + minutes)
 
-        return None
+        # Fallback: bare H:MM times not already matched (assume PM for this task context)
+        for match in re.finditer(r"(\d{1,2}):(\d{2})", text_lower):
+            if any(match.start() < end and match.end() > start for start, end in matched_spans):
+                continue
+            hours = int(match.group(1))
+            minutes = int(match.group(2))
+            if hours < 12:
+                hours += 12
+            results.append(hours * 60 + minutes)
+
+        return results
 
     def _check_time_in_range(self, message_content: str) -> bool:
-        """Check if time in message is within tolerance range."""
-        time_minutes = self._parse_time_to_minutes(message_content)
+        """Check if any time in message is within tolerance range."""
+        all_times = self._parse_all_times_to_minutes(message_content)
 
-        if time_minutes is None:
-            logger.info(f"Could not parse time from message: {message_content}")
+        if not all_times:
+            logger.info(f"Could not parse any time from message: {message_content}")
             return False
 
         min_time = self.expected_arrival_time_minutes - self.tolerance_minutes
         max_time = self.expected_arrival_time_minutes + self.tolerance_minutes
 
-        parsed_hour = time_minutes // 60
-        parsed_min = time_minutes % 60
+        for time_minutes in all_times:
+            parsed_hour = time_minutes // 60
+            parsed_min = time_minutes % 60
+            in_range = min_time <= time_minutes <= max_time
+            logger.info(
+                f"Parsed time: {time_minutes} minutes ({parsed_hour}:{parsed_min:02d}), "
+                f"Expected range: {min_time}-{max_time} minutes (8:15pm-8:45pm), "
+                f"in_range={in_range}"
+            )
+            if in_range:
+                return True
 
-        logger.info(
-            f"Parsed time: {time_minutes} minutes ({parsed_hour}:{parsed_min:02d}), "
-            f"Expected range: {min_time}-{max_time} minutes (8:15pm-8:45pm)"
-        )
-
-        return min_time <= time_minutes <= max_time
+        return False
 
     def is_successful(self, controller: AndroidController) -> float | tuple[float, str]:
         """Check if the correct SMS was sent to Susan with arrival time in acceptable range."""
