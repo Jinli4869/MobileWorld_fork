@@ -22,6 +22,7 @@ from mobile_world.runtime.utils.models import (
     DOUBLE_TAP,
     DRAG,
     INPUT_TEXT,
+    LONG_PRESS,
     MCP,
     NAVIGATE_BACK,
     NAVIGATE_HOME,
@@ -315,7 +316,6 @@ class SeedAgent(MCPAgent):
         func_name = parsed_action["function"]
         params = parsed_action["parameters"]
 
-        # Handle terminal actions
         if func_name == FINISH_WORD:
             return JSONAction(action_type=ANSWER, text=params.get("content", "success"))
 
@@ -325,7 +325,6 @@ class SeedAgent(MCPAgent):
         if func_name == CALL_USER:
             return JSONAction(action_type=ASK_USER, text=params.get("content", ""))
 
-        # Handle click action
         if func_name == "click":
             point_str = params.get("point", "0 0")
             x, y = parse_point_string(point_str)
@@ -334,15 +333,18 @@ class SeedAgent(MCPAgent):
             y = int(y * image_height / 1000)
             return JSONAction(action_type=CLICK, x=x, y=y)
 
-        # Handle double click
         if func_name == "left_double":
             point_str = params.get("point", "0 0")
             x, y = parse_point_string(point_str)
             x = int(x * image_width / 1000)
             y = int(y * image_height / 1000)
             return JSONAction(action_type=DOUBLE_TAP, x=x, y=y)
-        # Handle drag/swipe
-
+        if func_name == "long_press":
+            point_str = params.get("point", "0 0")
+            x, y = parse_point_string(point_str)
+            x = int(x * image_width / 1000)
+            y = int(y * image_height / 1000)
+            return JSONAction(action_type=LONG_PRESS, x=x, y=y)
         if func_name == "drag":
             start_str = params.get("start_point", "0 0")
             end_str = params.get("end_point", "0 0")

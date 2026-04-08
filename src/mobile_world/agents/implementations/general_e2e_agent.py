@@ -51,7 +51,7 @@ def parse_action(plan_output: str) -> tuple[str, str]:
         Tuple of (thought, action)
     """
     try:
-        parts = plan_output.split("Action:")
+        parts = plan_output.rsplit("Action:", 1)
 
         if len(parts) != 2:
             raise ValueError("Expected exactly one 'Action:' in the output")
