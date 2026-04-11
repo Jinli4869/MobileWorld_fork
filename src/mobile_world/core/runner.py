@@ -250,6 +250,7 @@ def run_agent_with_evaluation(
     enable_user_interaction: bool = False,
     max_concurrency: int | None = None,
     shuffle_tasks: bool = False,
+    auto_retry: int = 10,
     **kwargs,
 ) -> list[dict]:
     """Run the agent and return the evaluation results.
@@ -298,58 +299,80 @@ def run_agent_with_evaluation(
 
     logger.info("Task list: {} ({} tasks)", task_list, len(task_list))
 
-    finished_task_list, finished_scores = scan_finished_tasks(log_file_root, task_list)
-    logger.info("Finished task list: {} ({} tasks)", finished_task_list, len(finished_task_list))
-
-    task_list = [task for task in task_list if task not in finished_task_list]
-    logger.info("Remaining tasks to execute: {} ({} tasks)", task_list, len(task_list))
-
     num_envs = len(envs)
-    logger.info("Distributing {} tasks across {} environment(s)", len(task_list), num_envs)
+    max_attempts = min(1 + auto_retry, 10)  # Cap at 10 to prevent infinite loops
 
-    env_queue = Queue[tuple[AndroidEnvClient, str | None]](maxsize=num_envs)
-    for i, env in enumerate(envs):
-        env_queue.put((env, container_names[i] if container_names else None))
+    for attempt in range(max_attempts):
+        # Scan finished tasks each iteration (picks up results from previous attempts)
+        finished_task_list, finished_scores = scan_finished_tasks(log_file_root, task_list)
+        logger.info("Finished task list: {} ({} tasks)", finished_task_list, len(finished_task_list))
 
-    logger.info("Starting parallel task execution with threading backend...")
+        pending_tasks = [task for task in task_list if task not in finished_task_list]
+        logger.info(
+            "Attempt {}/{}: {} remaining tasks to execute",
+            attempt + 1, max_attempts, len(pending_tasks),
+        )
 
-    if shuffle_tasks:
-        random.shuffle(task_list)
-    if not dry_run:
-        task_results = Parallel(
-            n_jobs=min(max_concurrency if max_concurrency is not None else num_envs, num_envs),
-            backend="threading",
-        )(
-            delayed(_process_task_on_env)(
-                task_name=task_name,
-                env_queue=env_queue,
-                agent_type=agent_type,
-                model_name=model_name,
-                llm_base_url=llm_base_url,
-                api_key=api_key,
-                log_file_root=log_file_root,
-                max_step=max_step,
-                enable_mcp=enable_mcp,
-                **kwargs,
+        if not pending_tasks:
+            logger.info("All tasks finished, no retry needed")
+            break
+
+        env_queue = Queue[tuple[AndroidEnvClient, str | None]](maxsize=num_envs)
+        for i, env in enumerate(envs):
+            env_queue.put((env, container_names[i] if container_names else None))
+
+        if shuffle_tasks:
+            random.shuffle(pending_tasks)
+
+        if not dry_run:
+            task_results = Parallel(
+                n_jobs=min(max_concurrency if max_concurrency is not None else num_envs, num_envs),
+                backend="threading",
+            )(
+                delayed(_process_task_on_env)(
+                    task_name=task_name,
+                    env_queue=env_queue,
+                    agent_type=agent_type,
+                    model_name=model_name,
+                    llm_base_url=llm_base_url,
+                    api_key=api_key,
+                    log_file_root=log_file_root,
+                    max_step=max_step,
+                    enable_mcp=enable_mcp,
+                    **kwargs,
+                )
+                for task_name in pending_tasks
             )
-            for task_name in task_list
-        )
-    else:
-        logger.info("Dry run mode, skipping task execution")
-        task_results = []
+        else:
+            logger.info("Dry run mode, skipping task execution")
+            task_results = []
+            break
 
-    task_list_with_no_results = [
-        task_name for task_name, task_result in zip(task_list, task_results) if task_result is None
-    ]
-    logger.info(f"Task with no results count: {len(task_list_with_no_results)}")
-    success_task_results = [task_result for task_result in task_results if task_result is not None]
+        # Identify failed tasks for potential retry
+        failed_this_round = [
+            task_name for task_name, task_result in zip(pending_tasks, task_results)
+            if task_result is None
+        ]
 
-    for finished_task_name, finished_score in zip(finished_task_list, finished_scores):
-        success_task_results.append(
-            {
-                "task_name": finished_task_name,
-                "score": finished_score,
-            }
+        logger.info(
+            "Attempt {}/{} done: {} succeeded, {} failed/stale",
+            attempt + 1, max_attempts,
+            len(pending_tasks) - len(failed_this_round), len(failed_this_round),
         )
+
+        if not failed_this_round or attempt >= max_attempts - 1:
+            break
+
+        logger.info("Auto-retrying {} failed tasks (retry {}/{})", len(failed_this_round), attempt + 1, auto_retry)
+
+    # Final scan to get all finished results (including from retries)
+    finished_task_list, finished_scores = scan_finished_tasks(log_file_root, task_list)
+    # Build final results from scan (authoritative source)
+    success_task_results = []
+    for task_name, score in zip(finished_task_list, finished_scores):
+        success_task_results.append({"task_name": task_name, "score": score})
+
+    task_list_with_no_results = [task for task in task_list if task not in finished_task_list]
+    logger.info(f"Final: {len(success_task_results)} tasks with results, {len(task_list_with_no_results)} with no results")
 
     return (success_task_results, task_list_with_no_results)
