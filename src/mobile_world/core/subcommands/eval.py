@@ -161,11 +161,12 @@ def configure_parser(subparsers: argparse._SubParsersAction) -> None:
         help='Specific task(s) to run (comma-separated) or "ALL" to run all tasks and generate statistics',
     )
     eval_parser.add_argument(
-        "--max-retries",
-        "--max_rounds",
-        dest="max_retries",
+        "--auto-retry",
+        "--auto_retry",
+        dest="auto_retry",
         type=int,
-        help="Maximum number of retries",
+        default=10,
+        help="Number of automatic retry rounds for failed/stale tasks (default: 10)",
     )
     eval_parser.add_argument(
         "--dry-run",
@@ -231,6 +232,7 @@ async def execute(args: argparse.Namespace) -> None:
         max_concurrency=args.max_concurrency,
         shuffle_tasks=args.shuffle_tasks,
         scale_factor=getattr(args, "scale_factor", 1000),
+        auto_retry=args.auto_retry,
     )
     if run_all_tasks and task_results:
         total_duration = time.time() - start_time

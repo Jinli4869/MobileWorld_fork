@@ -33,7 +33,7 @@ from mobile_world.core.log_viewer.utils import (
 )
 
 
-def register_routes(rt, base_path: str = "/"):
+def register_routes(rt, base_path: str = "/", route_prefix: str = ""):
     """Register all routes with the given router.
 
     Args:
@@ -43,6 +43,12 @@ def register_routes(rt, base_path: str = "/"):
     # Normalize base_path
     if not base_path.endswith("/"):
         base_path = base_path + "/"
+
+    # Normalize route_prefix for route registration
+    if route_prefix:
+        route_prefix = route_prefix.rstrip("/")
+        if not route_prefix.startswith("/"):
+            route_prefix = "/" + route_prefix
 
     def url(path: str) -> str:
         """Build a URL with the base path prefix."""
@@ -449,7 +455,7 @@ def register_routes(rt, base_path: str = "/"):
             )
         return task_rows, filtered_count, total_count
 
-    @rt("/static/screenshots/{task_name}/{subfolder}/{filename}")
+    @rt(f"{route_prefix}/static/screenshots/{{task_name}}/{{subfolder}}/{{filename}}")
     async def serve_screenshot(task_name: str, subfolder: str, filename: str, request):
         """Serve screenshot files from screenshots or marked_screenshots folder."""
         filename = filename + ".png"
@@ -474,7 +480,7 @@ def register_routes(rt, base_path: str = "/"):
 
         return FileResponse(screenshot_path)
 
-    @rt("/static/user_screenshots/{traj_id}/{subfolder}/{filename}")
+    @rt(f"{route_prefix}/static/user_screenshots/{{traj_id}}/{{subfolder}}/{{filename}}")
     async def serve_user_screenshot(traj_id: str, subfolder: str, filename: str, request):
         """Serve screenshot files from user trajectory folders."""
         filename = filename + ".png"
@@ -498,7 +504,7 @@ def register_routes(rt, base_path: str = "/"):
 
         return FileResponse(screenshot_path)
 
-    @rt("/user_task/{traj_id}")
+    @rt(f"{route_prefix}/user_task/{{traj_id}}")
     def user_task_detail(traj_id: str, request):
         """Display detailed information for a user trajectory (simplified, no metadata)."""
         log_root_state = get_log_root_state()
@@ -870,7 +876,7 @@ def register_routes(rt, base_path: str = "/"):
             ),
         )
 
-    @rt("/task/{task_name}")
+    @rt(f"{route_prefix}/task/{{task_name}}")
     def task_detail(task_name: str, request):
         """Display detailed information for a specific task."""
         log_root_state = get_log_root_state()
@@ -1123,6 +1129,26 @@ def register_routes(rt, base_path: str = "/"):
                             else Span("-", cls="meta-value"),
                             cls="meta-item",
                         ),
+                        Div(
+                            Span("Thread Log", cls="meta-label"),
+                            A(
+                                "View",
+                                href="#",
+                                cls="meta-value tools-link",
+                                onclick="document.getElementById('thread-log-modal').style.display='flex'; htmx.trigger(document.getElementById('thread-log-content'), 'loadContent'); return false;",
+                            ),
+                            cls="meta-item",
+                        ),
+                        Div(
+                            Span("Trajectory", cls="meta-label"),
+                            A(
+                                "View",
+                                href="#",
+                                cls="meta-value tools-link",
+                                onclick="document.getElementById('traj-json-modal').style.display='flex'; htmx.trigger(document.getElementById('traj-json-content'), 'loadContent'); return false;",
+                            ),
+                            cls="meta-item",
+                        ),
                         cls="detail-meta-grid",
                     ),
                     cls="detail-header",
@@ -1250,10 +1276,125 @@ def register_routes(rt, base_path: str = "/"):
                     style="display: none;",
                     onclick="if(event.target === this) this.style.display='none';",
                 ),
+                # Thread Log modal (lazy-loaded)
+                Div(
+                    Div(
+                        Div(
+                            Span("Thread Log", cls="modal-title"),
+                            Button(
+                                "×",
+                                cls="modal-close",
+                                onclick="document.getElementById('thread-log-modal').style.display='none';",
+                            ),
+                            cls="modal-header",
+                        ),
+                        Div(
+                            Pre(
+                                "Loading...",
+                                id="thread-log-content",
+                                cls="log-file-content",
+                                hx_get=url(f"task/{task_name}/thread-log?log_root={quote(log_root)}"),
+                                hx_trigger="loadContent once",
+                                hx_swap="innerHTML",
+                            ),
+                            cls="modal-body modal-body-log",
+                        ),
+                        cls="modal-content modal-content-wide",
+                    ),
+                    id="thread-log-modal",
+                    cls="modal-overlay",
+                    style="display: none;",
+                    onclick="if(event.target === this) this.style.display='none';",
+                ),
+                # Traj JSON modal (lazy-loaded)
+                Div(
+                    Div(
+                        Div(
+                            Span("Trajectory JSON", cls="modal-title"),
+                            Button(
+                                "×",
+                                cls="modal-close",
+                                onclick="document.getElementById('traj-json-modal').style.display='none';",
+                            ),
+                            cls="modal-header",
+                        ),
+                        Div(
+                            Pre(
+                                "Loading...",
+                                id="traj-json-content",
+                                cls="log-file-content",
+                                hx_get=url(f"task/{task_name}/traj-json?log_root={quote(log_root)}"),
+                                hx_trigger="loadContent once",
+                                hx_swap="innerHTML",
+                            ),
+                            cls="modal-body modal-body-log",
+                        ),
+                        cls="modal-content modal-content-wide",
+                    ),
+                    id="traj-json-modal",
+                    cls="modal-overlay",
+                    style="display: none;",
+                    onclick="if(event.target === this) this.style.display='none';",
+                ),
                 script,
                 cls="detail-page",
             ),
         )
+
+    @rt(f"{route_prefix}/task/{{task_name}}/thread-log")
+    def task_thread_log(task_name: str, request):
+        """Serve the thread log file content for a task."""
+        log_root_raw = request.query_params.get("log_root", "")
+        log_root = unquote(log_root_raw) if log_root_raw else ""
+        if not log_root:
+            return "Log root not specified"
+
+        task_folder = os.path.join(log_root, task_name)
+        if not os.path.isdir(task_folder):
+            return "Task folder not found"
+
+        # Find thread log file(s)
+        log_files = sorted(
+            [f for f in os.listdir(task_folder) if f.startswith("thread_") and f.endswith(".log")]
+        )
+        if not log_files:
+            return "No thread log found"
+
+        # Read all thread logs concatenated
+        content_parts = []
+        for log_file in log_files:
+            log_path = os.path.join(task_folder, log_file)
+            try:
+                with open(log_path, "r", errors="replace") as f:
+                    content_parts.append(f"=== {log_file} ===\n{f.read()}")
+            except Exception as e:
+                content_parts.append(f"=== {log_file} ===\nError reading file: {e}")
+
+        return "\n\n".join(content_parts)
+
+    @rt(f"{route_prefix}/task/{{task_name}}/traj-json")
+    def task_traj_json(task_name: str, request):
+        """Serve the traj.json file content for a task."""
+        log_root_raw = request.query_params.get("log_root", "")
+        log_root = unquote(log_root_raw) if log_root_raw else ""
+        if not log_root:
+            return "Log root not specified"
+
+        task_folder = os.path.join(log_root, task_name)
+        traj_path = os.path.join(task_folder, "traj.json")
+        if not os.path.isfile(traj_path):
+            return "traj.json not found"
+
+        try:
+            with open(traj_path, "r", errors="replace") as f:
+                data = json.load(f)
+            return json.dumps(data, indent=2, ensure_ascii=False)
+        except json.JSONDecodeError:
+            # If it's not valid JSON, return raw content
+            with open(traj_path, "r", errors="replace") as f:
+                return f.read()
+        except Exception as e:
+            return f"Error reading traj.json: {e}"
 
     def _build_user_trajectory_pagination(
         current_page: int,
@@ -1347,7 +1488,7 @@ def register_routes(rt, base_path: str = "/"):
 
         return Div(*controls, cls="input-row-logroot")
 
-    @rt("/")
+    @rt(f"{route_prefix}/")
     def index(request):
         """Main page showing all tasks."""
         log_root_state = get_log_root_state()
@@ -1806,7 +1947,7 @@ def register_routes(rt, base_path: str = "/"):
             ),
         )
 
-    @rt("/refresh")
+    @rt(f"{route_prefix}/refresh")
     def refresh(request):
         """Refresh endpoint for auto-refresh."""
         log_root_state = get_log_root_state()

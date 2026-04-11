@@ -14,6 +14,8 @@ from .server import configure_parser as configure_server_parser
 from .server import execute as execute_server
 from .test import configure_parser as configure_test_parser
 from .test import execute as execute_test
+from .eval_server import configure_parser as configure_eval_server_parser
+from .eval_server import execute as execute_eval_server
 
 __all__ = [
     "configure_server_parser",
@@ -30,4 +32,6 @@ __all__ = [
     "execute_env",
     "configure_info_parser",
     "execute_info",
+    "configure_eval_server_parser",
+    "execute_eval_server",
 ]

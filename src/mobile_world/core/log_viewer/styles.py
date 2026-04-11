@@ -935,6 +935,31 @@ input[type="checkbox"] {
     font-weight: 600;
     color: var(--accent-color);
 }
+
+/* Wide modal for logs/JSON */
+.modal-content-wide {
+    max-width: 1000px;
+    width: 95%;
+    max-height: 85vh;
+}
+
+.modal-body-log {
+    padding: 0;
+}
+
+.log-file-content {
+    margin: 0;
+    padding: 16px 20px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-all;
+    color: var(--text-primary);
+    background-color: var(--bg-primary);
+    overflow-y: auto;
+    max-height: 70vh;
+}
 """
 
 HTML_BODY_CSS = """

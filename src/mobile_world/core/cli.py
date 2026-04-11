@@ -26,6 +26,7 @@ def create_parser() -> argparse.ArgumentParser:
     subcommands.configure_logs_parser(subparsers)
     subcommands.configure_env_parser(subparsers)
     subcommands.configure_info_parser(subparsers)
+    subcommands.configure_eval_server_parser(subparsers)
 
     return parser
 
@@ -49,6 +50,8 @@ async def async_main() -> None:
         await subcommands.execute_env(args)
     elif args.command == "info":
         await subcommands.execute_info(args)
+    elif args.command == "eval-server":
+        await subcommands.execute_eval_server(args)
     else:
         parser.print_help()
         sys.exit(1)
