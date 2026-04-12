@@ -109,16 +109,30 @@ def get_job(job_id: str) -> dict | None:
     return dict(row) if row else None
 
 
-def list_jobs(status: str | None = None) -> list[dict]:
+def list_jobs(
+    status: str | None = None,
+    agent_type: str | None = None,
+    label: str | None = None,
+    model_name: str | None = None,
+) -> list[dict]:
     conn = get_connection()
+    clauses, params = [], []
     if status:
-        rows = conn.execute(
-            "SELECT * FROM jobs WHERE status = ? ORDER BY created_at DESC", (status,)
-        ).fetchall()
-    else:
-        rows = conn.execute(
-            "SELECT * FROM jobs ORDER BY created_at DESC"
-        ).fetchall()
+        clauses.append("status = ?")
+        params.append(status)
+    if agent_type:
+        clauses.append("agent_type = ?")
+        params.append(agent_type)
+    if label:
+        clauses.append("label LIKE ?")
+        params.append(f"%{label}%")
+    if model_name:
+        clauses.append("model_name LIKE ?")
+        params.append(f"%{model_name}%")
+    where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
+    rows = conn.execute(
+        f"SELECT * FROM jobs{where} ORDER BY created_at DESC", params
+    ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
 

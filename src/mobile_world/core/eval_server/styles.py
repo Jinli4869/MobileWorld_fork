@@ -49,6 +49,45 @@ html, body {
     font-weight: 600;
 }
 
+/* Filter bar */
+.filter-bar {
+    display: flex;
+    gap: 12px;
+    align-items: flex-end;
+    padding: 12px 16px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+.filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 140px;
+}
+.filter-label {
+    font-size: 11px;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.filter-bar select,
+.filter-bar input {
+    padding: 6px 10px;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 13px;
+    outline: none;
+}
+.filter-bar select:focus,
+.filter-bar input:focus {
+    border-color: var(--accent-color);
+}
+
 /* Stats cards row */
 .stats-row {
     display: grid;

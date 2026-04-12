@@ -74,7 +74,36 @@ function convertEpochs() {
     });
 }
 convertEpochs();
-document.body.addEventListener('htmx:afterSwap', convertEpochs);
+document.body.addEventListener('htmx:afterSwap', function(e) {
+    convertEpochs();
+    if (e.detail.target && e.detail.target.id === 'modal-inner') {
+        document.getElementById('submit-modal').style.display = 'flex';
+    }
+});
+
+function applyFilters() {
+    var el = document.getElementById('dashboard-content');
+    if (!el) return;
+    var base = el.getAttribute('hx-get').split('?')[0];
+    var params = new URLSearchParams();
+    var s = document.getElementById('filter-status');
+    var a = document.getElementById('filter-agent');
+    var l = document.getElementById('filter-label');
+    var m = document.getElementById('filter-model');
+    if (s && s.value) params.set('status', s.value);
+    if (a && a.value) params.set('agent_type', a.value);
+    if (l && l.value) params.set('label', l.value);
+    if (m && m.value) params.set('model_name', m.value);
+    var qs = params.toString();
+    el.setAttribute('hx-get', qs ? base + '?' + qs : base);
+    htmx.trigger(el, 'filterChanged');
+}
+
+var _filterTimer = null;
+function debouncedApplyFilters() {
+    clearTimeout(_filterTimer);
+    _filterTimer = setTimeout(applyFilters, 300);
+}
 """
 
 
@@ -100,16 +129,16 @@ def register_routes(rt, base_path: str = "/"):
     def _get_agent_types() -> list[str]:
         return list(AGENT_CONFIGS.keys())
 
-    def _agent_type_select():
-        options = [Option(name, value=name) for name in _get_agent_types()]
+    def _agent_type_select(selected: str = ""):
+        options = [Option(name, value=name, selected=(name == selected)) for name in _get_agent_types()]
         return Select(*options, name="agent_type", id="agent-type-select")
 
-    def _image_select():
+    def _image_select(selected: str = ""):
         images = get_available_images()
         if images:
             options = [
                 Option(f"{img['tag']}  ({img['created'].split('.')[0] if img['created'] else ''})",
-                       value=img["full"], selected=(i == 0))
+                       value=img["full"], selected=(img["full"] == selected if selected else i == 0))
                 for i, img in enumerate(images)
             ]
         else:
@@ -195,105 +224,125 @@ def register_routes(rt, base_path: str = "/"):
 
         return Div(*cards, cls="stats-row")
 
+    def _submit_modal_content(defaults: dict | None = None):
+        """Render the inner content of the submit job modal.
+
+        Args:
+            defaults: Optional dict of field values to pre-fill (for copy-job).
+        """
+        d = defaults or {}
+        title = "Copy Job \u2014 Submit as New" if defaults else "Submit Evaluation Job"
+        return Div(
+            Div(
+                H2(title),
+                Button("x", cls="modal-close", onclick="document.getElementById('submit-modal').style.display='none'"),
+                style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 1px solid var(--border-color);",
+            ),
+            Form(
+                Div(
+                    Div(
+                        Label("Label (optional)"),
+                        Input(name="label", placeholder="e.g. your name or experiment tag",
+                              value=d.get("label", "")),
+                        cls="form-group",
+                    ),
+                    Div(
+                        Label(
+                            "Agent Type ",
+                            Button("↻", type="button", cls="refresh-btn",
+                                   hx_get=url("agent-types"),
+                                   hx_target="#agent-type-select",
+                                   hx_swap="outerHTML"),
+                        ),
+                        _agent_type_select(selected=d.get("agent_type", "")),
+                        cls="form-group",
+                    ),
+                    Div(
+                        Label(
+                            "Docker Image ",
+                            Button("↻", type="button", cls="refresh-btn",
+                                   hx_get=url("image-versions"),
+                                   hx_target="#image-select",
+                                   hx_swap="outerHTML"),
+                        ),
+                        _image_select(selected=d.get("env_image", "")),
+                        cls="form-group",
+                    ),
+                    Div(
+                        Label("Model Name"),
+                        Input(name="model_name", required=True,
+                              placeholder="e.g. gui-32b-0403-V8d1",
+                              value=d.get("model_name", "")),
+                        cls="form-group",
+                    ),
+                    Div(
+                        Label("LLM Base URL"),
+                        Input(name="llm_base_url", required=True,
+                              placeholder="http://...",
+                              value=d.get("llm_base_url", "")),
+                        cls="form-group",
+                    ),
+                    Div(
+                        Label("API Key (optional, falls back to .env)"),
+                        Input(name="api_key", type="password",
+                              placeholder="Leave empty to use .env"),
+                        cls="form-group",
+                    ),
+                    Div(
+                        Label("Number of Environments"),
+                        Input(name="env_count", type="number",
+                              value=str(d.get("env_count", 5)),
+                              min="1", max="40", required=True),
+                        cls="form-group",
+                    ),
+                    Div(
+                        Label("Max Rounds"),
+                        Input(name="max_round", type="number",
+                              value=str(d.get("max_round", 50)),
+                              min="1"),
+                        cls="form-group",
+                    ),
+                    Div(
+                        Label("Step Wait Time (seconds)"),
+                        Input(name="step_wait_time", type="number",
+                              value=str(d.get("step_wait_time", 3)),
+                              min="0.1", step="0.1"),
+                        cls="form-group",
+                    ),
+                    Div(
+                        Label("Auto Retry (rounds)"),
+                        Input(name="auto_retry", type="number",
+                              value=str(d.get("auto_retry", 10)),
+                              min="0", max="10"),
+                        cls="form-group",
+                    ),
+                    Div(
+                        Label(
+                            Input(type="checkbox", name="enable_user_interaction",
+                                  checked=d.get("enable_user_interaction", True)),
+                            " Enable User Interaction Tasks",
+                            cls="toggle-label",
+                        ),
+                        cls="form-group",
+                    ),
+                    cls="form-grid",
+                ),
+                Div(
+                    Button("Submit Job", type="submit", cls="btn btn-primary",
+                           onclick="this.disabled=true;this.textContent='Submitting...';this.form.submit()"),
+                    style="margin-top: 20px; text-align: right;",
+                ),
+                method="post",
+                action=url("submit"),
+            ),
+            id="modal-inner",
+            cls="modal-content",
+        )
+
     def _submit_modal():
         """Render the submit job modal."""
         return Div(
-            Div(
-                Div(
-                    H2("Submit Evaluation Job"),
-                    Button("x", cls="modal-close", onclick="document.getElementById('submit-modal').style.display='none'"),
-                    style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 1px solid var(--border-color);",
-                ),
-                Form(
-                    Div(
-                        Div(
-                            Label("Label (optional)"),
-                            Input(name="label", placeholder="e.g. your name or experiment tag"),
-                            cls="form-group",
-                        ),
-                        Div(
-                            Label(
-                                "Agent Type ",
-                                Button("↻", type="button", cls="refresh-btn",
-                                       hx_get=url("agent-types"),
-                                       hx_target="#agent-type-select",
-                                       hx_swap="outerHTML"),
-                            ),
-                            _agent_type_select(),
-                            cls="form-group",
-                        ),
-                        Div(
-                            Label(
-                                "Docker Image ",
-                                Button("↻", type="button", cls="refresh-btn",
-                                       hx_get=url("image-versions"),
-                                       hx_target="#image-select",
-                                       hx_swap="outerHTML"),
-                            ),
-                            _image_select(),
-                            cls="form-group",
-                        ),
-                        Div(
-                            Label("Model Name"),
-                            Input(name="model_name", required=True,
-                                  placeholder="e.g. gui-32b-0403-V8d1"),
-                            cls="form-group",
-                        ),
-                        Div(
-                            Label("LLM Base URL"),
-                            Input(name="llm_base_url", required=True,
-                                  placeholder="http://..."),
-                            cls="form-group",
-                        ),
-                        Div(
-                            Label("API Key (optional, falls back to .env)"),
-                            Input(name="api_key", type="password",
-                                  placeholder="Leave empty to use .env"),
-                            cls="form-group",
-                        ),
-                        Div(
-                            Label("Number of Environments"),
-                            Input(name="env_count", type="number", value="5",
-                                  min="1", max="40", required=True),
-                            cls="form-group",
-                        ),
-                        Div(
-                            Label("Max Rounds"),
-                            Input(name="max_round", type="number", value="50",
-                                  min="1"),
-                            cls="form-group",
-                        ),
-                        Div(
-                            Label("Step Wait Time (seconds)"),
-                            Input(name="step_wait_time", type="number", value="3",
-                                  min="0.1", step="0.1"),
-                            cls="form-group",
-                        ),
-                        Div(
-                            Label("Auto Retry (rounds)"),
-                            Input(name="auto_retry", type="number", value="10",
-                                  min="0", max="10"),
-                            cls="form-group",
-                        ),
-                        Div(
-                            Label(
-                                Input(type="checkbox", name="enable_user_interaction", checked=True),
-                                " Enable User Interaction Tasks",
-                                cls="toggle-label",
-                            ),
-                            cls="form-group",
-                        ),
-                        cls="form-grid",
-                    ),
-                    Div(
-                        Button("Submit Job", type="submit", cls="btn btn-primary"),
-                        style="margin-top: 20px; text-align: right;",
-                    ),
-                    method="post",
-                    action=url("submit"),
-                ),
-                cls="modal-content",
-            ),
+            _submit_modal_content(),
             id="submit-modal",
             cls="modal-overlay",
             style="display:none;",
@@ -314,6 +363,9 @@ def register_routes(rt, base_path: str = "/"):
                     Div(
                         Span(dashboard_btn, style="margin-right: 8px;"),
                         Button("Submit Job", cls="btn btn-sm btn-primary",
+                               hx_get=url("submit-form"),
+                               hx_target="#modal-inner",
+                               hx_swap="outerHTML",
                                onclick="document.getElementById('submit-modal').style.display='flex'"),
                     ),
                     cls="app-header",
@@ -325,13 +377,16 @@ def register_routes(rt, base_path: str = "/"):
             ),
         )
 
-    def _build_dashboard_content():
+    def _build_dashboard_content(filters: dict | None = None):
         """Build the dashboard content (shared between full page and HTMX partial)."""
-        jobs = db.list_jobs()
-        running_jobs = [j for j in jobs if j["status"] == "running"]
+        # Stats use all jobs (unfiltered)
+        all_jobs = db.list_jobs()
+        # Table uses filtered jobs
+        jobs = db.list_jobs(**(filters or {})) if filters else all_jobs
+        running_jobs = [j for j in all_jobs if j["status"] == "running"]
         running_envs = sum(j["env_count"] for j in running_jobs)
-        completed_jobs = [j for j in jobs if j["status"] == "completed"]
-        failed_jobs = [j for j in jobs if j["status"] == "failed"]
+        completed_jobs = [j for j in all_jobs if j["status"] == "completed"]
+        failed_jobs = [j for j in all_jobs if j["status"] == "failed"]
         containers = get_docker_containers()
 
         # Build container popover content grouped by image
@@ -358,7 +413,7 @@ def register_routes(rt, base_path: str = "/"):
         )
 
         stats = Div(
-            Div(Div(str(len(jobs)), cls="stat-value"),
+            Div(Div(str(len(all_jobs)), cls="stat-value"),
                 Div("Total Jobs", cls="stat-label"), cls="stat-card"),
             Div(Div(str(len(running_jobs)), cls="stat-value"),
                 Div("Running", cls="stat-label"), cls="stat-card"),
@@ -374,14 +429,23 @@ def register_routes(rt, base_path: str = "/"):
 
         rows = []
         for j in jobs:
-            actions = ""
+            action_items = []
+            action_items.append(
+                Button("Copy", cls="btn btn-sm",
+                       hx_get=url(f"jobs/{j['id']}/copy-form"),
+                       hx_target="#modal-inner",
+                       hx_swap="outerHTML"),
+            )
             if j["status"] in ("queued", "running"):
-                actions = Form(
-                    Button("Cancel", cls="btn btn-danger btn-sm", type="submit"),
-                    method="post",
-                    action=url(f"jobs/{j['id']}/cancel"),
-                    onsubmit="return confirm('Cancel this job?')",
-                )
+                action_items.append(
+                    Form(
+                        Button("Cancel", cls="btn btn-danger btn-sm", type="submit"),
+                        method="post",
+                        action=url(f"jobs/{j['id']}/cancel"),
+                        onsubmit="return confirm('Cancel this job?')",
+                        style="display:inline;",
+                    ))
+            actions = Div(*action_items, style="display:flex;gap:4px;align-items:center;")
 
             # Progress / Score
             if j["status"] == "running":
@@ -449,29 +513,77 @@ def register_routes(rt, base_path: str = "/"):
     # ── Dashboard ────────────────────────────────────────────
     # Routes registered at plain paths; url() used only for HTML output
 
-    @rt("/")
-    def dashboard():
-        stats, table = _build_dashboard_content()
-        dashboard_content = Div(
-            stats, table,
-            id="dashboard-content",
-            hx_get=url("dashboard-content"),
-            hx_trigger="every 5s",
-            hx_swap="outerHTML",
+    def _filter_bar():
+        """Render the filter bar above the jobs table."""
+        statuses = ["queued", "running", "completed", "failed", "cancelled"]
+        agent_types = _get_agent_types()
+        return Div(
+            Div(
+                Label("Status", cls="filter-label"),
+                Select(
+                    Option("All", value=""),
+                    *[Option(s, value=s) for s in statuses],
+                    id="filter-status", onchange="applyFilters()",
+                ),
+                cls="filter-group",
+            ),
+            Div(
+                Label("Agent", cls="filter-label"),
+                Select(
+                    Option("All", value=""),
+                    *[Option(a, value=a) for a in agent_types],
+                    id="filter-agent", onchange="applyFilters()",
+                ),
+                cls="filter-group",
+            ),
+            Div(
+                Label("Label", cls="filter-label"),
+                Input(id="filter-label", placeholder="Filter by label...",
+                      oninput="debouncedApplyFilters()"),
+                cls="filter-group",
+            ),
+            Div(
+                Label("Model", cls="filter-label"),
+                Input(id="filter-model", placeholder="Filter by model...",
+                      oninput="debouncedApplyFilters()"),
+                cls="filter-group",
+            ),
+            cls="filter-bar",
         )
-        return _page_shell(dashboard_content, active_page="dashboard")
 
-    @rt("/dashboard-content")
-    def dashboard_content():
-        """HTMX partial for dashboard polling."""
-        stats, table = _build_dashboard_content()
+    def _dashboard_content_div(filters: dict | None = None):
+        """Build the polling div with filter-aware hx-get URL."""
+        stats, table = _build_dashboard_content(filters)
+        # Preserve active filters in the polling URL
+        params = "&".join(f"{k}={quote(str(v))}" for k, v in (filters or {}).items() if v)
+        poll_url = url("dashboard-content") + ("?" + params if params else "")
         return Div(
             stats, table,
             id="dashboard-content",
-            hx_get=url("dashboard-content"),
-            hx_trigger="every 5s",
+            hx_get=poll_url,
+            hx_trigger="every 5s, filterChanged",
             hx_swap="outerHTML",
         )
+
+    @rt("/")
+    def dashboard():
+        return _page_shell(
+            _filter_bar(),
+            _dashboard_content_div(),
+            active_page="dashboard",
+        )
+
+    @rt("/dashboard-content")
+    def dashboard_content(
+        status: str = "", agent_type: str = "",
+        label: str = "", model_name: str = "",
+    ):
+        """HTMX partial for dashboard polling."""
+        filters = {k: v for k, v in dict(
+            status=status, agent_type=agent_type,
+            label=label, model_name=model_name,
+        ).items() if v}
+        return _dashboard_content_div(filters or None)
 
     # ── Agent Types (HTMX) ────────────────────────────────────
 
@@ -489,6 +601,33 @@ def register_routes(rt, base_path: str = "/"):
     def image_versions_select():
         """Return fresh image version select."""
         return _image_select()
+
+    # ── Submit Form (HTMX) ─────────────────────────────────
+
+    @rt("/submit-form")
+    def submit_form():
+        """Return a blank submit form (resets modal after a copy action)."""
+        return _submit_modal_content()
+
+    @rt("/jobs/{job_id}/copy-form")
+    def copy_form(job_id: str):
+        """Return the submit form pre-filled with an existing job's parameters."""
+        job = db.get_job(job_id)
+        if not job:
+            return _submit_modal_content()
+        defaults = {
+            "label": job.get("label", ""),
+            "agent_type": job["agent_type"],
+            "env_image": job.get("env_image", ""),
+            "model_name": job["model_name"],
+            "llm_base_url": job["llm_base_url"],
+            "env_count": job["env_count"],
+            "max_round": job["max_round"],
+            "step_wait_time": job["step_wait_time"],
+            "auto_retry": job.get("auto_retry", 0),
+            "enable_user_interaction": bool(job.get("enable_user_interaction")),
+        }
+        return _submit_modal_content(defaults)
 
     # ── Submit Job ───────────────────────────────────────────
 
@@ -566,7 +705,12 @@ def register_routes(rt, base_path: str = "/"):
             )
 
         # Action buttons row
-        action_buttons = []
+        action_buttons = [
+            Button("Copy to New Job", cls="action-btn action-btn-primary",
+                   hx_get=url(f"jobs/{job_id}/copy-form"),
+                   hx_target="#modal-inner",
+                   hx_swap="outerHTML"),
+        ]
         log_dir = job.get("log_dir", "")
         if log_dir and os.path.isdir(log_dir):
             abs_log_dir = os.path.abspath(log_dir)
