@@ -1,5 +1,6 @@
 """Route handlers for the log viewer."""
 
+import html
 import json
 import os
 import time
@@ -1370,7 +1371,9 @@ def register_routes(rt, base_path: str = "/", route_prefix: str = ""):
             except Exception as e:
                 content_parts.append(f"=== {log_file} ===\nError reading file: {e}")
 
-        return "\n\n".join(content_parts)
+        # HTML-escape to preserve XML-like tags (e.g. <thinking>, <tool_call>)
+        # that would otherwise be stripped by the browser when injected via innerHTML
+        return html.escape("\n\n".join(content_parts))
 
     @rt(f"{route_prefix}/task/{{task_name}}/traj-json")
     def task_traj_json(task_name: str, request):
@@ -1388,11 +1391,11 @@ def register_routes(rt, base_path: str = "/", route_prefix: str = ""):
         try:
             with open(traj_path, "r", errors="replace") as f:
                 data = json.load(f)
-            return json.dumps(data, indent=2, ensure_ascii=False)
+            return html.escape(json.dumps(data, indent=2, ensure_ascii=False))
         except json.JSONDecodeError:
             # If it's not valid JSON, return raw content
             with open(traj_path, "r", errors="replace") as f:
-                return f.read()
+                return html.escape(f.read())
         except Exception as e:
             return f"Error reading traj.json: {e}"
 
