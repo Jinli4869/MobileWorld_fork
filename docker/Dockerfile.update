@@ -4,10 +4,16 @@ FROM ghcr.io/tongyi-mai/mobile_world:latest
 RUN apt-get update && apt-get install -y --no-install-recommends socat && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
+# Switch to iptables-nft backend for compatibility with host kernels (6.x+)
+# that have dropped the legacy iptable_nat module in favor of nftables-only NAT.
+# The entrypoint also does runtime detection and can fall back to legacy if needed.
+RUN update-alternatives --set iptables /usr/sbin/iptables-nft && \
+    update-alternatives --set ip6tables /usr/sbin/ip6tables-nft
+
 # Copy updated source code
 COPY src/ /app/service/src/
 
-# Copy updated entrypoint (adds socat ADB relay)
+# Copy updated entrypoint (iptables auto-detection + dockerd health check)
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 

@@ -12,7 +12,7 @@ import mobile_world.agents.registry as _registry_module
 from mobile_world.agents.registry import AGENT_CONFIGS
 from mobile_world.core.eval_server import db
 from mobile_world.core.eval_server.styles import EVAL_SERVER_CSS
-from mobile_world.core.eval_server.worker import cancel_job, get_docker_containers
+from mobile_world.core.eval_server.worker import cancel_job, get_available_images, get_docker_containers
 
 
 _total_task_cache: dict[str, int] = {}
@@ -103,6 +103,18 @@ def register_routes(rt, base_path: str = "/"):
     def _agent_type_select():
         options = [Option(name, value=name) for name in _get_agent_types()]
         return Select(*options, name="agent_type", id="agent-type-select")
+
+    def _image_select():
+        images = get_available_images()
+        if images:
+            options = [
+                Option(f"{img['tag']}  ({img['created'].split('.')[0] if img['created'] else ''})",
+                       value=img["full"], selected=(i == 0))
+                for i, img in enumerate(images)
+            ]
+        else:
+            options = [Option("(no images found)", value="")]
+        return Select(*options, name="env_image", id="image-select")
 
     def _status_badge(status: str):
         return Span(status, cls=f"badge badge-{status}")
@@ -208,6 +220,17 @@ def register_routes(rt, base_path: str = "/"):
                                        hx_swap="outerHTML"),
                             ),
                             _agent_type_select(),
+                            cls="form-group",
+                        ),
+                        Div(
+                            Label(
+                                "Docker Image ",
+                                Button("↻", type="button", cls="refresh-btn",
+                                       hx_get=url("image-versions"),
+                                       hx_target="#image-select",
+                                       hx_swap="outerHTML"),
+                            ),
+                            _image_select(),
                             cls="form-group",
                         ),
                         Div(
@@ -460,6 +483,13 @@ def register_routes(rt, base_path: str = "/"):
         options = [Option(name, value=name) for name in fresh_configs.keys()]
         return Select(*options, name="agent_type", id="agent-type-select")
 
+    # ── Image Versions (HTMX) ────────────────────────────────
+
+    @rt("/image-versions")
+    def image_versions_select():
+        """Return fresh image version select."""
+        return _image_select()
+
     # ── Submit Job ───────────────────────────────────────────
 
     @rt("/submit", methods=["POST"])
@@ -474,6 +504,7 @@ def register_routes(rt, base_path: str = "/"):
         step_wait_time: float = 1.0,
         auto_retry: int = 0,
         enable_user_interaction: str = "",
+        env_image: str = "",
     ):
         job = db.create_job(
             agent_type=agent_type,
@@ -486,6 +517,7 @@ def register_routes(rt, base_path: str = "/"):
             step_wait_time=step_wait_time,
             auto_retry=int(auto_retry),
             enable_user_interaction=enable_user_interaction == "on",
+            env_image=env_image,
         )
         return RedirectResponse(url(f"jobs/{job['id']}"), status_code=303)
 
@@ -503,6 +535,7 @@ def register_routes(rt, base_path: str = "/"):
             ("Agent Type", job["agent_type"]),
             ("Model", job["model_name"]),
             ("LLM URL", job["llm_base_url"]),
+            ("Image", job.get("env_image") or "default"),
             ("Envs", str(job["env_count"])),
             ("Max Rounds", str(job["max_round"])),
             ("Step Wait", f"{job['step_wait_time']}s"),

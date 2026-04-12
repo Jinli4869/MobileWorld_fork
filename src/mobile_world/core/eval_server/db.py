@@ -41,6 +41,7 @@ def init_db(db_dir: str = ".") -> None:
             step_wait_time    REAL DEFAULT 1.0,
             auto_retry          INTEGER DEFAULT 0,
             enable_user_interaction INTEGER DEFAULT 0,
+            env_image         TEXT DEFAULT '',
             container_prefix  TEXT NOT NULL,
             log_dir           TEXT DEFAULT '',
             tmux_session      TEXT DEFAULT '',
@@ -61,6 +62,12 @@ def init_db(db_dir: str = ".") -> None:
     except sqlite3.OperationalError:
         conn.execute("ALTER TABLE jobs ADD COLUMN auto_retry INTEGER DEFAULT 0")
         conn.commit()
+    # Migration: add env_image column if missing
+    try:
+        conn.execute("SELECT env_image FROM jobs LIMIT 1")
+    except sqlite3.OperationalError:
+        conn.execute("ALTER TABLE jobs ADD COLUMN env_image TEXT DEFAULT ''")
+        conn.commit()
     conn.close()
 
 
@@ -75,6 +82,7 @@ def create_job(
     step_wait_time: float = 1.0,
     auto_retry: int = 0,
     enable_user_interaction: bool = False,
+    env_image: str = "",
 ) -> dict:
     job_id = uuid.uuid4().hex[:12]
     prefix = f"eval_{job_id}"
@@ -82,11 +90,11 @@ def create_job(
     conn.execute(
         """INSERT INTO jobs (id, label, agent_type, model_name, llm_base_url,
            api_key, env_count, max_round, step_wait_time,
-           auto_retry, enable_user_interaction, container_prefix)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+           auto_retry, enable_user_interaction, env_image, container_prefix)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (job_id, label, agent_type, model_name, llm_base_url,
          api_key, env_count, max_round, step_wait_time,
-         auto_retry, int(enable_user_interaction), prefix),
+         auto_retry, int(enable_user_interaction), env_image, prefix),
     )
     conn.commit()
     row = conn.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()

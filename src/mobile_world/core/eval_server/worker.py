@@ -60,6 +60,30 @@ def count_docker_containers() -> int:
     return len(get_docker_containers())
 
 
+def get_available_images(repo: str = "ghcr.io/tongyi-mai/mobile_world") -> list[dict]:
+    """List locally available Docker images for the given repo, newest first."""
+    result = _run_shell(
+        f"docker images --filter reference='{repo}' "
+        f"--format '{{{{.Tag}}}}\\t{{{{.CreatedAt}}}}\\t{{{{.ID}}}}'"
+    )
+    if result.returncode != 0:
+        logger.warning("Failed to list docker images: {}", result.stderr)
+        return []
+    images = []
+    for line in result.stdout.strip().split("\n"):
+        if not line:
+            continue
+        parts = line.split("\t")
+        images.append({
+            "tag": parts[0] if len(parts) > 0 else "",
+            "created": parts[1] if len(parts) > 1 else "",
+            "id": parts[2] if len(parts) > 2 else "",
+            "full": f"{repo}:{parts[0]}" if len(parts) > 0 else repo,
+        })
+    # Already sorted by creation date (newest first) from docker images
+    return images
+
+
 def _start_job(job: dict) -> None:
     """Launch containers and start eval in a tmux session."""
     job_id = job["id"]
@@ -90,11 +114,16 @@ def _start_job(job: dict) -> None:
         eval_cmd_parts.extend(["--auto-retry", str(job["auto_retry"])])
     if job.get("enable_user_interaction"):
         eval_cmd_parts.append("--enable-user-interaction")
+    env_image = job.get("env_image", "")
+    if env_image:
+        eval_cmd_parts.extend(["--env-image", env_image])
 
     eval_cmd = " ".join(eval_cmd_parts)
 
     # Combined command: launch containers, then run eval
     env_cmd = f"uv run mw env run --count {env_count} --mount-src --name-prefix {prefix}"
+    if env_image:
+        env_cmd += f" --image {env_image}"
     full_cmd = f"{env_cmd} && {eval_cmd}"
 
     # Wrap with shell prefix if configured (e.g. sg docker -c)
@@ -122,10 +151,13 @@ def _start_job(job: dict) -> None:
     )
 
 
-def _cleanup_containers(prefix: str) -> None:
+def _cleanup_containers(prefix: str, image: str = "") -> None:
     """Remove containers with the given prefix."""
     logger.info("Cleaning up containers with prefix: {}", prefix)
-    result = _run_shell(f"uv run mw env rm --all --name-prefix {prefix}")
+    cmd = f"uv run mw env rm --all --name-prefix {prefix}"
+    if image:
+        cmd += f" --image {image}"
+    result = _run_shell(cmd)
     if result.returncode != 0:
         logger.warning("Container cleanup warning: {}", result.stderr)
 
@@ -208,7 +240,7 @@ def _check_running_jobs() -> None:
             logger.info("Job {} tmux session ended, collecting results", job["id"])
 
             results = _parse_eval_results(job.get("log_dir", ""))
-            _cleanup_containers(job["container_prefix"])
+            _cleanup_containers(job["container_prefix"], job.get("env_image", ""))
 
             # Determine final status
             status = "completed" if results.get("total_tasks") else "failed"
@@ -265,7 +297,7 @@ def cancel_job(job_id: str) -> bool:
                 capture_output=True,
             )
         # Cleanup containers
-        _cleanup_containers(job["container_prefix"])
+        _cleanup_containers(job["container_prefix"], job.get("env_image", ""))
         return True
 
     return False

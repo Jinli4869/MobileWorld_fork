@@ -736,6 +736,100 @@ def check_kvm_available() -> PrerequisiteCheckResult:
         )
 
 
+def check_iptables_nat() -> PrerequisiteCheckResult:
+    """Check if the host kernel supports iptables NAT for Docker-in-Docker networking.
+
+    Docker-in-Docker requires iptables NAT support. Newer kernels (6.x+) may have
+    dropped the legacy iptable_nat module. In that case, dockerd inside the container
+    must use the nftables backend (iptables-nft) instead.
+
+    Returns:
+        PrerequisiteCheckResult with check status
+    """
+    # Check if iptable_nat module is loaded or available
+    try:
+        result = subprocess.run(
+            ["lsmod"],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode == 0:
+            loaded_modules = result.stdout
+            has_iptable_nat = "iptable_nat" in loaded_modules
+            has_nft_nat = "nft_chain_nat" in loaded_modules or "nf_nat" in loaded_modules
+
+            if has_iptable_nat:
+                return PrerequisiteCheckResult(
+                    name="iptables NAT",
+                    passed=True,
+                    message="iptable_nat module is loaded (legacy iptables supported)",
+                )
+
+            if has_nft_nat:
+                # nftables NAT is available but legacy iptable_nat is not.
+                # Check if iptable_nat module exists on disk.
+                modinfo_result = subprocess.run(
+                    ["modinfo", "iptable_nat"],
+                    capture_output=True,
+                    text=True,
+                )
+                if modinfo_result.returncode != 0:
+                    # Module doesn't exist at all — kernel dropped legacy iptables NAT
+                    return PrerequisiteCheckResult(
+                        name="iptables NAT",
+                        passed=True,
+                        message="nftables NAT only (legacy iptable_nat not available in this kernel)",
+                        details=(
+                            "This kernel uses nftables-only NAT (no iptable_nat module).\n"
+                            "Docker-in-Docker must use iptables-nft backend.\n"
+                            "Our Docker image handles this automatically, but if you see\n"
+                            "iptables NAT errors, ensure the image is up-to-date."
+                        ),
+                    )
+                else:
+                    # Module exists but not loaded — can be loaded
+                    return PrerequisiteCheckResult(
+                        name="iptables NAT",
+                        passed=True,
+                        message="nftables NAT loaded; iptable_nat available but not loaded",
+                        details=(
+                            "iptable_nat module is available but not loaded.\n"
+                            "Load it with: sudo modprobe iptable_nat\n"
+                            "Or rely on iptables-nft backend (handled automatically in our image)."
+                        ),
+                    )
+
+            # Neither legacy nor nftables NAT is available
+            return PrerequisiteCheckResult(
+                name="iptables NAT",
+                passed=False,
+                message="No iptables NAT support detected",
+                details=(
+                    "Neither iptable_nat nor nftables NAT modules are loaded.\n"
+                    "Docker-in-Docker requires NAT support for container networking.\n\n"
+                    "Try loading the modules:\n"
+                    "  sudo modprobe iptable_nat\n"
+                    "  sudo modprobe nf_nat\n\n"
+                    "If modules don't exist, your kernel may need to be upgraded\n"
+                    "or rebuilt with CONFIG_NF_NAT / CONFIG_NFT_CHAIN_NAT enabled."
+                ),
+            )
+    except FileNotFoundError:
+        pass
+    except Exception as e:
+        return PrerequisiteCheckResult(
+            name="iptables NAT",
+            passed=False,
+            message=f"Failed to check iptables NAT support: {e}",
+        )
+
+    return PrerequisiteCheckResult(
+        name="iptables NAT",
+        passed=True,
+        message="Could not verify (lsmod not available), skipping",
+    )
+
+
 def check_prerequisites() -> PrerequisiteCheckResults:
     """Run all prerequisite checks for MobileWorld environment.
 
@@ -747,6 +841,7 @@ def check_prerequisites() -> PrerequisiteCheckResults:
         check_docker_running(),
         check_docker_permission(),
         check_kvm_available(),
+        check_iptables_nat(),
     ]
     return PrerequisiteCheckResults(checks=checks)
 
