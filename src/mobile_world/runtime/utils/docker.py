@@ -120,11 +120,13 @@ def docker_inspect(container_name: str) -> dict[str, Any] | None:
         return None
 
 
-def docker_rm(container_name: str, *, force: bool = True) -> None:
+def docker_rm(container_name: str, *, force: bool = True, volumes: bool = False) -> None:
     """Remove a container by name."""
     cmd = ["docker", "rm"]
     if force:
         cmd.append("-f")
+    if volumes:
+        cmd.append("-v")
     cmd.append(container_name)
     run_command(cmd)
 

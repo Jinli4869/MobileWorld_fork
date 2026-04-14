@@ -478,18 +478,19 @@ def get_container_info(container_name: str) -> ContainerInfo | None:
     )
 
 
-def remove_container(container_name: str, force: bool = True) -> bool:
+def remove_container(container_name: str, force: bool = True, volumes: bool = True) -> bool:
     """Remove a Docker container.
 
     Args:
         container_name: Name of the container to remove
         force: Force removal
+        volumes: Also remove associated volumes
 
     Returns:
         True if successful, False otherwise
     """
     try:
-        docker_rm(container_name, force=force)
+        docker_rm(container_name, force=force, volumes=volumes)
         return True
     except SystemExit:
         return False
@@ -500,6 +501,7 @@ def remove_containers(
     image_filter: str = DEFAULT_IMAGE,
     name_prefix: str = DEFAULT_NAME_PREFIX,
     force: bool = True,
+    volumes: bool = True,
 ) -> tuple[list[str], list[str]]:
     """Remove multiple Docker containers.
 
@@ -508,6 +510,7 @@ def remove_containers(
         image_filter: Filter by image name
         name_prefix: Filter by name prefix
         force: Force removal
+        volumes: Also remove associated volumes
 
     Returns:
         Tuple of (destroyed, failed) container names
@@ -524,7 +527,7 @@ def remove_containers(
     failed = []
 
     for name in container_names:
-        if remove_container(name, force=force):
+        if remove_container(name, force=force, volumes=volumes):
             destroyed.append(name)
         else:
             failed.append(name)
