@@ -42,6 +42,8 @@ While maintaining the same level of rigorous, reproducible evaluation as Android
 </p>
 
 ## 📢 Updates
+- **2026-04-15: Important Fix — Mattermost Session Expiry**
+    If you pulled the Docker image before this date, Mattermost task evaluations may produce **false negatives** due to expired authentication tokens in the emulator snapshot. Please **`git pull`** the latest codebase — the fix runs automatically during task initialization (no Docker image rebuild required).
 - **2026-03-20: End-to-End Frontier Model Evaluation & Real Device Support🔥**
     We benchmarked five frontier models — **Seed-2.0-Pro**, **Gemini 3 Pro**, **KIMI K2.5**, **Claude Sonnet 4.5**, and **Qwen-3.5** — for end-to-end mobile-use, and demonstrated real-phone execution. See our [blog post](https://tongyi-mai.github.io/MAI-UI-blog/MobileWorld-Blog-Post) for the full write-up.
     * 🏆 **New SOTA:** **Seed-2.0-Pro** leads at **63.2%** GUI-Only and **61.4%** User-Interaction, overtaking Seed-1.8 as the top end-to-end model.
