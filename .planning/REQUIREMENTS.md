@@ -14,10 +14,10 @@
 
 ### Tool Routing & Capability Policy
 
-- [ ] **TOOL-01**: Runner dispatches GUI actions, MCP calls, and ask-user events via one unified tool router.
-- [ ] **TOOL-02**: Task/tag/profile capability policy can enable/disable tool classes deterministically per run.
-- [ ] **TOOL-03**: MCP tool registration supports allowlist and timeout controls captured in run metadata.
-- [ ] **TOOL-04**: Tool execution errors are normalized into comparable failure events across frameworks.
+- [x] **TOOL-01**: Runner dispatches GUI actions, MCP calls, and ask-user events via one unified tool router.
+- [x] **TOOL-02**: Task/tag/profile capability policy can enable/disable tool classes deterministically per run.
+- [x] **TOOL-03**: MCP tool registration supports allowlist and timeout controls captured in run metadata.
+- [x] **TOOL-04**: Tool execution errors are normalized into comparable failure events across frameworks.
 
 ### Evaluator Contracts
 
@@ -81,10 +81,10 @@
 | ADPT-03 | Phase 1 | Completed |
 | ADPT-04 | Phase 1 | Completed |
 | TRCE-01 | Phase 1 | Completed |
-| TOOL-01 | Phase 2 | Pending |
-| TOOL-02 | Phase 2 | Pending |
-| TOOL-03 | Phase 2 | Pending |
-| TOOL-04 | Phase 2 | Pending |
+| TOOL-01 | Phase 2 | Completed |
+| TOOL-02 | Phase 2 | Completed |
+| TOOL-03 | Phase 2 | Completed |
+| TOOL-04 | Phase 2 | Completed |
 | EVAL-01 | Phase 3 | Pending |
 | EVAL-02 | Phase 3 | Pending |
 | EVAL-03 | Phase 3 | Pending |
@@ -113,4 +113,4 @@
 
 ---
 *Requirements defined: 2026-04-16*
-*Last updated: 2026-04-17 after Phase 1 protocol baseline execution*
+*Last updated: 2026-04-17 after Phase 2 tool router/capability policy execution*

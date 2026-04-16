@@ -2,6 +2,7 @@
 
 import asyncio
 import concurrent.futures
+import json
 import os
 from collections.abc import Callable
 from threading import Lock
@@ -47,6 +48,26 @@ MCP_CONFIG = {
 }
 CLIENT = None
 client_lock = Lock()
+
+
+def _load_mcp_config() -> dict:
+    """Load MCP config from env path when provided."""
+    config_path = os.getenv("MOBILE_WORLD_MCP_CONFIG_PATH")
+    if not config_path:
+        return MCP_CONFIG
+    if not os.path.exists(config_path):
+        logger.warning("MOBILE_WORLD_MCP_CONFIG_PATH not found: {}", config_path)
+        return MCP_CONFIG
+    try:
+        with open(config_path, encoding="utf-8") as f:
+            loaded = json.load(f)
+        if not isinstance(loaded, dict):
+            raise ValueError("MCP config file must contain a JSON object")
+        logger.info("Loaded MCP config from {}", config_path)
+        return loaded
+    except Exception as exc:
+        logger.warning("Failed to load MCP config from {}: {}", config_path, exc)
+        return MCP_CONFIG
 
 
 class SyncMCPClient:
@@ -168,5 +189,5 @@ def init_mcp_clients() -> SyncMCPClient:
     with client_lock:
         global CLIENT
         if CLIENT is None:
-            CLIENT = SyncMCPClient(config=MCP_CONFIG)
+            CLIENT = SyncMCPClient(config=_load_mcp_config())
         return CLIENT

@@ -114,6 +114,18 @@ class TrajLogger:
             os.path.join(self.log_file_dir, self.canonical_meta_file_name),
         )
 
+    @staticmethod
+    def _read_json_or_default(path: str, default: dict | None = None) -> dict:
+        if default is None:
+            default = {}
+        if not os.path.exists(path):
+            return default.copy()
+        try:
+            with open(path, encoding="utf-8") as f:
+                return json.load(f)
+        except (json.JSONDecodeError, FileNotFoundError):
+            return default.copy()
+
     def _write_canonical_meta(
         self,
         task_name: str,
@@ -122,6 +134,7 @@ class TrajLogger:
         token_usage: dict[str, int] | None = None,
     ) -> None:
         _, meta_path = self._canonical_paths()
+        existing_meta = self._read_json_or_default(meta_path, default={})
         header = CanonicalTrajectoryHeader(
             task_name=task_name,
             task_goal=task_goal,
@@ -129,9 +142,12 @@ class TrajLogger:
             tools=self.tools or [],
             metadata={"legacy_traj_file": self.log_file_name},
         ).model_dump()
+        for key in ("tool_manifest", "policy_manifest", "token_usage"):
+            if key in existing_meta:
+                header[key] = existing_meta[key]
         if token_usage is not None:
             header["token_usage"] = token_usage
-        with open(meta_path, "w") as f:
+        with open(meta_path, "w", encoding="utf-8") as f:
             json.dump(header, f, ensure_ascii=False, indent=4)
 
     def _append_canonical_event(self, event: dict) -> None:
@@ -212,15 +228,49 @@ class TrajLogger:
     def log_tools(self, tools: list[dict]):
         self.tools = tools
         _, meta_path = self._canonical_paths()
-        if os.path.exists(meta_path):
-            try:
-                with open(meta_path, encoding="utf-8") as f:
-                    meta = json.load(f)
-            except json.JSONDecodeError:
-                meta = {}
-            meta["tools"] = tools
-            with open(meta_path, "w", encoding="utf-8") as f:
-                json.dump(meta, f, ensure_ascii=False, indent=4)
+        meta = self._read_json_or_default(meta_path, default={})
+        meta["tools"] = tools
+        with open(meta_path, "w", encoding="utf-8") as f:
+            json.dump(meta, f, ensure_ascii=False, indent=4)
+
+    def log_tool_manifest(self, manifest: dict) -> None:
+        """Persist deterministic tool manifest to legacy and canonical artifacts."""
+        task_id = "0"
+        legacy_path = os.path.join(self.log_file_dir, self.log_file_name)
+        legacy = self._read_json_or_default(legacy_path, default={})
+        if task_id not in legacy:
+            legacy[task_id] = {"tools": self.tools, "traj": []}
+        legacy[task_id]["tool_manifest"] = manifest
+        with open(legacy_path, "w", encoding="utf-8") as f:
+            json.dump(legacy, f, ensure_ascii=False, indent=4)
+
+        _, meta_path = self._canonical_paths()
+        meta = self._read_json_or_default(meta_path, default={})
+        meta["tool_manifest"] = manifest
+        with open(meta_path, "w", encoding="utf-8") as f:
+            json.dump(meta, f, ensure_ascii=False, indent=4)
+
+    def log_tool_error(self, *, step: int, error: dict) -> None:
+        """Attach normalized tool error to the latest matching step record."""
+        task_id = "0"
+        legacy_path = os.path.join(self.log_file_dir, self.log_file_name)
+        legacy = self._read_json_or_default(legacy_path, default={})
+        traj = legacy.get(task_id, {}).get("traj", [])
+        for entry in reversed(traj):
+            if entry.get("step") == step:
+                entry["tool_error"] = error
+                break
+        with open(legacy_path, "w", encoding="utf-8") as f:
+            json.dump(legacy, f, ensure_ascii=False, indent=4)
+
+        self._append_canonical_event(
+            {
+                "type": "tool_error",
+                "schema_version": "1.0.0",
+                "step": step,
+                "error": error,
+            }
+        )
 
     def log_score(self, score: float, reason: str = "Unknown reason"):
         with open(os.path.join(self.log_file_dir, self.score_file_name), "w") as f:
@@ -246,8 +296,7 @@ class TrajLogger:
         with open(os.path.join(self.log_file_dir, self.log_file_name), "w") as f:
             json.dump(log_data, f, ensure_ascii=False, indent=4)
         _, meta_path = self._canonical_paths()
-        with open(meta_path, encoding="utf-8") as f:
-            meta_data = json.load(f)
+        meta_data = self._read_json_or_default(meta_path, default={})
         meta_data["token_usage"] = token_usage
         with open(meta_path, "w", encoding="utf-8") as f:
             json.dump(meta_data, f, ensure_ascii=False, indent=4)

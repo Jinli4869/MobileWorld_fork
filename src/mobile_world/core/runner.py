@@ -15,6 +15,8 @@ from mobile_world.runtime.client import (
     AndroidMCPEnvClient,
     scan_finished_tasks,
 )
+from mobile_world.runtime.protocol.capability_policy import resolve_capability_policy
+from mobile_world.runtime.protocol.tool_router import UnifiedToolRouter
 from mobile_world.runtime.protocol.validation import ProtocolValidationError, run_protocol_preflight
 from mobile_world.runtime.utils.docker import (
     discover_backends,
@@ -31,6 +33,7 @@ def _execute_single_task(
     task_name: str,
     max_step: int,
     traj_logger: TrajLogger,
+    tool_router: UnifiedToolRouter | None = None,
     enable_mcp: bool = False,
 ) -> tuple[int, float]:
     """Execute a single task and return the number of steps and score.
@@ -87,13 +90,26 @@ def _execute_single_task(
         if action.action_type in [ENV_FAIL, FINISHED, UNKNOWN]:
             logger.debug(f"task terminated in step {step} with action {action.action_type}")
             terminate = True
-        elif action.action_type in [ANSWER]:
-            logger.debug(f"answer triggered, execution action {action}")
-            obs = env.execute_action(action)
-            terminate = True
         else:
             logger.debug(f"execution action {action}")
-            obs = env.execute_action(action)
+            if tool_router is not None:
+                dispatch_result = tool_router.dispatch(env, action)
+                if not dispatch_result.ok:
+                    normalized_error = dispatch_result.error.model_dump() if dispatch_result.error else {}
+                    traj_logger.log_tool_error(step=step, error=normalized_error)
+                    logger.warning(
+                        "Tool dispatch failed at step {} with error {}",
+                        step,
+                        normalized_error,
+                    )
+                    terminate = True
+                else:
+                    if dispatch_result.observation is not None:
+                        obs = dispatch_result.observation
+            else:
+                obs = env.execute_action(action)
+            if action.action_type in [ANSWER]:
+                terminate = True
         if terminate:
             break
 
@@ -123,6 +139,9 @@ def _process_task_on_env(
     max_step: int,
     retry_on_device_unhealthy: int = 2,
     enable_mcp: bool = False,
+    enable_user_interaction: bool = False,
+    capability_policy_path: str | None = None,
+    mcp_tool_allowlist: str | list[str] | None = None,
     **kwargs,
 ) -> dict:
     """Process a single task on a specific environment.
@@ -162,15 +181,47 @@ def _process_task_on_env(
     try:
         with logger.contextualize(thread_id=thread_id, container_name=container_name):
             logger.info("Processing task '{}' on environment {}", task_name, env.base_url)
+
+            policy_path = capability_policy_path
+            allowlist_override = mcp_tool_allowlist
+            if isinstance(allowlist_override, str):
+                allowlist_override = [
+                    token.strip() for token in allowlist_override.split(",") if token.strip()
+                ]
+
+            task_tags: list[str] = []
+            try:
+                task_metadata = env.get_task_metadata(task_type=task_name)
+                task_tags = task_metadata.get("tags", [])
+            except Exception:
+                logger.exception("Failed to load task metadata for capability policy")
+
+            capability_decision = resolve_capability_policy(
+                task_tags=task_tags,
+                profile_name=agent_type,
+                enable_mcp=enable_mcp,
+                enable_user_interaction=enable_user_interaction,
+                policy_path=policy_path,
+                mcp_allowlist_override=allowlist_override,
+            )
+
             if enable_mcp:
                 assert isinstance(env, AndroidMCPEnvClient), (
                     f"env must be a AndroidMCPEnvClient, but got {type(env)}"
                 )
                 try:
-                    env.reset_tools(task_type=task_name)
+                    env.set_mcp_timeout(capability_decision.mcp_timeout_seconds)
+                    env.reset_tools(
+                        task_type=task_name,
+                        allowlist=capability_decision.enabled_mcp_tools,
+                    )
                 except Exception as e:
                     logger.exception(f"Error resetting tools for task {task_name}: {e}")
                     return None
+                traj_logger.log_tools(env.tools)
+
+            traj_logger.log_tool_manifest(capability_decision.as_manifest())
+            tool_router = UnifiedToolRouter(capability_decision)
 
             agent = create_agent(agent_type, model_name, llm_base_url, api_key, env=env, **kwargs)
 
@@ -183,6 +234,7 @@ def _process_task_on_env(
                         task_name,
                         max_step,
                         traj_logger=traj_logger,
+                        tool_router=tool_router,
                         enable_mcp=enable_mcp,
                     )
                     break
@@ -253,6 +305,8 @@ def run_agent_with_evaluation(
     shuffle_tasks: bool = False,
     auto_retry: int = 10,
     skip_protocol_validation: bool = False,
+    capability_policy_path: str | None = None,
+    mcp_tool_allowlist: str | None = None,
     **kwargs,
 ) -> list[dict]:
     """Run the agent and return the evaluation results.
@@ -354,6 +408,9 @@ def run_agent_with_evaluation(
                     log_file_root=log_file_root,
                     max_step=max_step,
                     enable_mcp=enable_mcp,
+                    enable_user_interaction=enable_user_interaction,
+                    capability_policy_path=capability_policy_path,
+                    mcp_tool_allowlist=mcp_tool_allowlist,
                     **kwargs,
                 )
                 for task_name in pending_tasks

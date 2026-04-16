@@ -13,6 +13,12 @@ from mobile_world.runtime.protocol.adapter import (
     FrameworkAdapter,
     LegacyAgentAdapter,
 )
+from mobile_world.runtime.protocol.capability_policy import (
+    CapabilityDecision,
+    CapabilityPolicyConfig,
+    CapabilityPolicyRule,
+    resolve_capability_policy,
+)
 from mobile_world.runtime.protocol.events import (
     CANONICAL_TRAJECTORY_SCHEMA_VERSION,
     CanonicalScoreEvent,
@@ -28,6 +34,12 @@ from mobile_world.runtime.protocol.registry import (
     list_adapters,
     list_registrations,
     register_adapter,
+)
+from mobile_world.runtime.protocol.tool_router import (
+    NormalizedToolError,
+    ToolDispatchResult,
+    UnifiedToolRouter,
+    classify_action_type,
 )
 from mobile_world.runtime.protocol.validation import (
     ProtocolValidationError,
@@ -50,23 +62,30 @@ __all__ = [
     "AdapterStepResult",
     "ArtifactRecord",
     "CANONICAL_TRAJECTORY_SCHEMA_VERSION",
+    "CapabilityDecision",
+    "CapabilityPolicyConfig",
+    "CapabilityPolicyRule",
     "CanonicalScoreEvent",
     "CanonicalStepEvent",
     "CanonicalTrajectoryHeader",
     "FrameworkAdapter",
     "LegacyAgentAdapter",
     "MetricsQualityFlags",
+    "NormalizedToolError",
     "ProtocolValidationError",
+    "ToolDispatchResult",
+    "UnifiedToolRouter",
     "ValidationIssue",
     "ValidationReport",
     "clear_adapters",
+    "classify_action_type",
     "get_adapter_registration",
     "has_adapter",
     "list_adapters",
     "list_registrations",
     "register_adapter",
+    "resolve_capability_policy",
     "run_protocol_preflight",
     "validate_adapter_contracts",
     "validate_canonical_schema",
 ]
-

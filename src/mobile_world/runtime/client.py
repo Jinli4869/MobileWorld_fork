@@ -3,6 +3,7 @@ import copy
 import json
 import os
 import time
+from fnmatch import fnmatch
 from io import BytesIO
 
 import backoff
@@ -341,6 +342,8 @@ class AndroidMCPEnvClient(AndroidEnvClient):
         # initialize the MCP client
         logger.debug("initializing the MCP client")
         mcp_client = init_mcp_clients()
+        self.mcp_client = mcp_client
+        self.mcp_timeout_seconds = 120
         self.tools = []
         self.tools = mcp_client.list_tools_sync()
         self.complete_tool_set = copy.deepcopy(self.tools)
@@ -348,7 +351,27 @@ class AndroidMCPEnvClient(AndroidEnvClient):
 
         logger.debug(f"loaded {len(self.tools)} tools: {[tool['name'] for tool in self.tools]}")
 
-    def reset_tools(self, filters: list[str] = None, task_type=None):
+    def set_mcp_timeout(self, timeout_seconds: int | None) -> None:
+        """Set MCP call timeout in seconds."""
+        if timeout_seconds is None:
+            return
+        self.mcp_timeout_seconds = max(1, int(timeout_seconds))
+
+    def _apply_mcp_allowlist(self, allowlist: list[str]) -> None:
+        """Apply exact/pattern allowlist to currently filtered tools."""
+        if not allowlist:
+            self.tools = []
+            return
+        if "*" in set(allowlist):
+            return
+        allowed = []
+        for tool in self.tools:
+            tool_name = tool.get("name", "")
+            if any(fnmatch(tool_name, pattern) for pattern in allowlist):
+                allowed.append(tool)
+        self.tools = allowed
+
+    def reset_tools(self, filters: list[str] = None, task_type=None, allowlist: list[str] | None = None):
         is_not_mcp_task = True
         if task_type is not None:
             metadata = self.get_task_metadata(task_type=task_type)
@@ -366,8 +389,15 @@ class AndroidMCPEnvClient(AndroidEnvClient):
                 for tool in self.complete_tool_set
                 if any(f.lower() in tool["name"].lower() for f in filters)
             ]
-            assert len(self.tools) > 0 or is_not_mcp_task, f"No tools found for task {task_type}"
-            logger.debug(f"reset tools: {self.tools}")
+        if allowlist is not None:
+            self._apply_mcp_allowlist(allowlist)
+        assert len(self.tools) > 0 or is_not_mcp_task, f"No tools found for task {task_type}"
+        logger.debug(
+            "reset tools with allowlist={} timeout={}s: {}",
+            allowlist,
+            self.mcp_timeout_seconds,
+            self.tools,
+        )
 
     def _truncate_tool_call(self, tool_call: dict) -> dict:
         """Truncate the tool call to 1000 characters."""
@@ -380,7 +410,10 @@ class AndroidMCPEnvClient(AndroidEnvClient):
         if action.action_type == MCP:
             action_name = action.action_name
             action_args = action.action_json
+            if action_name not in self.tool_map:
+                raise ValueError(f"MCP tool not found: {action_name}")
             client = self.tool_map[action_name]
+            client.timeout = self.mcp_timeout_seconds
             result = client.call_tool_sync(action_name, action_args)
             result = self._truncate_tool_call(result)
 

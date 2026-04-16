@@ -147,6 +147,18 @@ def _add_common_arguments(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         help="Skip protocol pre-flight validation (debug only)",
     )
+    parser.add_argument(
+        "--capability-policy",
+        "--capability_policy",
+        dest="capability_policy_path",
+        help="Path to capability policy JSON config",
+    )
+    parser.add_argument(
+        "--mcp-tool-allowlist",
+        "--mcp_tool_allowlist",
+        dest="mcp_tool_allowlist",
+        help="Comma-separated MCP tool allowlist override (supports '*' and fnmatch patterns)",
+    )
 
 
 def configure_parser(subparsers: argparse._SubParsersAction) -> None:
@@ -241,6 +253,8 @@ async def execute(args: argparse.Namespace) -> None:
         scale_factor=getattr(args, "scale_factor", 1000),
         auto_retry=args.auto_retry,
         skip_protocol_validation=getattr(args, "skip_protocol_validation", False),
+        capability_policy_path=getattr(args, "capability_policy_path", None),
+        mcp_tool_allowlist=getattr(args, "mcp_tool_allowlist", None),
     )
     if run_all_tasks and task_results:
         total_duration = time.time() - start_time

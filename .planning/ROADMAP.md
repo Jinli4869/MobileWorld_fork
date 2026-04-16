@@ -11,7 +11,7 @@ This roadmap upgrades MobileWorld from built-in-agent evaluation to a protocol-d
 - Decimal phases (2.1, 2.2): Urgent insertions (marked with INSERTED)
 
 - [x] **Phase 1: Protocol Baseline** - Define adapter, action/tool, and trajectory contracts
-- [ ] **Phase 2: Tool Router & Capability Policy** - Unify GUI/MCP/ask-user routing with deterministic controls
+- [x] **Phase 2: Tool Router & Capability Policy** - Unify GUI/MCP/ask-user routing with deterministic controls
 - [ ] **Phase 3: Evaluator Unification** - Centralize scoring and optional trajectory judge integration
 - [ ] **Phase 3.1: Metrics Instrumentation & KPI Contracts (INSERTED)** - Add token/latency/cost/reliability KPI capture and definitions
 - [ ] **Phase 4: Nanobot Reference Integration** - Validate architecture with nanobot/OpenGUI adapter
@@ -49,10 +49,10 @@ Plans:
 **Plans**: 4 plans
 
 Plans:
-- [ ] 02-01: Implement unified tool router and dispatch hooks
-- [ ] 02-02: Implement capability policy engine and config schema
-- [ ] 02-03: Refactor MCP registration to config-driven allowlist model
-- [ ] 02-04: Add error normalization and deterministic tool manifest logging
+- [x] 02-01: Implement unified tool router and dispatch hooks
+- [x] 02-02: Implement capability policy engine and config schema
+- [x] 02-03: Refactor MCP registration to config-driven allowlist model
+- [x] 02-04: Add error normalization and deterministic tool manifest logging
 
 ### Phase 3: Evaluator Unification
 **Goal**: Make scoring framework-agnostic and auditable.
@@ -143,7 +143,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 3.1 -> 4 -> 5 -> 6
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Protocol Baseline | 4/4 | Completed | 2026-04-17 |
-| 2. Tool Router & Capability Policy | 0/4 | Not started | - |
+| 2. Tool Router & Capability Policy | 4/4 | Completed | 2026-04-17 |
 | 3. Evaluator Unification | 0/4 | Not started | - |
 | 3.1. Metrics Instrumentation & KPI Contracts | 0/4 | Not started | - |
 | 4. Nanobot Reference Integration | 0/3 | Not started | - |
