@@ -67,4 +67,5 @@ class CanonicalScoreEvent(BaseModel):
     run_id: str
     score: float
     reason: str
-
+    evaluator: str | None = None
+    evidence_refs: list[dict[str, Any]] = Field(default_factory=list)

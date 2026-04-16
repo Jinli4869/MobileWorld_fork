@@ -80,12 +80,16 @@ def normalize_score_event(
     run_id: str,
     score: float,
     reason: str,
+    evaluator: str | None = None,
+    evidence_refs: list[dict[str, Any]] | None = None,
 ) -> CanonicalScoreEvent:
     """Create canonical score event from legacy runtime payloads."""
+    normalized_refs = _ensure_json_serializable(evidence_refs) if evidence_refs else []
     return CanonicalScoreEvent(
         task_name=task_name,
         run_id=run_id,
         score=float(score),
         reason=str(reason),
+        evaluator=evaluator,
+        evidence_refs=normalized_refs,
     )
-

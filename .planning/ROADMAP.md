@@ -12,7 +12,7 @@ This roadmap upgrades MobileWorld from built-in-agent evaluation to a protocol-d
 
 - [x] **Phase 1: Protocol Baseline** - Define adapter, action/tool, and trajectory contracts
 - [x] **Phase 2: Tool Router & Capability Policy** - Unify GUI/MCP/ask-user routing with deterministic controls
-- [ ] **Phase 3: Evaluator Unification** - Centralize scoring and optional trajectory judge integration
+- [x] **Phase 3: Evaluator Unification** - Centralize scoring and optional trajectory judge integration
 - [ ] **Phase 3.1: Metrics Instrumentation & KPI Contracts (INSERTED)** - Add token/latency/cost/reliability KPI capture and definitions
 - [ ] **Phase 4: Nanobot Reference Integration** - Validate architecture with nanobot/OpenGUI adapter
 - [ ] **Phase 5: Framework Expansion & CLI Profiles** - Add OpenClaw/hermes scaffolds and framework-oriented commands
@@ -66,10 +66,10 @@ Plans:
 **Plans**: 4 plans
 
 Plans:
-- [ ] 03-01: Define evaluator protocol and evaluator registry
-- [ ] 03-02: Bridge existing task-native scoring into evaluator interface
-- [ ] 03-03: Integrate trajectory judge backend with explicit config recording
-- [ ] 03-04: Add evaluator audit output and score consistency checks
+- [x] 03-01: Define evaluator protocol and evaluator registry
+- [x] 03-02: Bridge existing task-native scoring into evaluator interface
+- [x] 03-03: Integrate trajectory judge backend with explicit config recording
+- [x] 03-04: Add evaluator audit output and score consistency checks
 
 ### Phase 3.1: Metrics Instrumentation & KPI Contracts (INSERTED)
 **Goal**: Make benchmark efficiency, latency, cost, and reliability metrics first-class and comparable.
@@ -144,7 +144,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 3.1 -> 4 -> 5 -> 6
 |-------|----------------|--------|-----------|
 | 1. Protocol Baseline | 4/4 | Completed | 2026-04-17 |
 | 2. Tool Router & Capability Policy | 4/4 | Completed | 2026-04-17 |
-| 3. Evaluator Unification | 0/4 | Not started | - |
+| 3. Evaluator Unification | 4/4 | Completed | 2026-04-17 |
 | 3.1. Metrics Instrumentation & KPI Contracts | 0/4 | Not started | - |
 | 4. Nanobot Reference Integration | 0/3 | Not started | - |
 | 5. Framework Expansion & CLI Profiles | 0/3 | Not started | - |

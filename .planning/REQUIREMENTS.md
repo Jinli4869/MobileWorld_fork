@@ -21,10 +21,10 @@
 
 ### Evaluator Contracts
 
-- [ ] **EVAL-01**: Benchmark scoring uses a centralized evaluator interface independent of framework adapter internals.
-- [ ] **EVAL-02**: Existing task-native deterministic scoring remains supported as primary evaluator signal.
-- [ ] **EVAL-03**: Optional trajectory judge (LLM-based) can be enabled with explicit model/config recording.
-- [ ] **EVAL-04**: Evaluator outputs include score, reason, and evidence references for auditability.
+- [x] **EVAL-01**: Benchmark scoring uses a centralized evaluator interface independent of framework adapter internals.
+- [x] **EVAL-02**: Existing task-native deterministic scoring remains supported as primary evaluator signal.
+- [x] **EVAL-03**: Optional trajectory judge (LLM-based) can be enabled with explicit model/config recording.
+- [x] **EVAL-04**: Evaluator outputs include score, reason, and evidence references for auditability.
 
 ### Metrics & Telemetry
 
@@ -85,10 +85,10 @@
 | TOOL-02 | Phase 2 | Completed |
 | TOOL-03 | Phase 2 | Completed |
 | TOOL-04 | Phase 2 | Completed |
-| EVAL-01 | Phase 3 | Pending |
-| EVAL-02 | Phase 3 | Pending |
-| EVAL-03 | Phase 3 | Pending |
-| EVAL-04 | Phase 3 | Pending |
+| EVAL-01 | Phase 3 | Completed |
+| EVAL-02 | Phase 3 | Completed |
+| EVAL-03 | Phase 3 | Completed |
+| EVAL-04 | Phase 3 | Completed |
 | METR-01 | Phase 3.1 | Pending |
 | METR-02 | Phase 3.1 | Pending |
 | METR-03 | Phase 3.1 | Pending |
@@ -113,4 +113,4 @@
 
 ---
 *Requirements defined: 2026-04-16*
-*Last updated: 2026-04-17 after Phase 2 tool router/capability policy execution*
+*Last updated: 2026-04-17 after Phase 3 evaluator unification execution*

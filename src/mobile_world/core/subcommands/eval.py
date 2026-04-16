@@ -159,6 +159,32 @@ def _add_common_arguments(parser: argparse.ArgumentParser) -> None:
         dest="mcp_tool_allowlist",
         help="Comma-separated MCP tool allowlist override (supports '*' and fnmatch patterns)",
     )
+    parser.add_argument(
+        "--enable-trajectory-judge",
+        "--enable_trajectory_judge",
+        dest="enable_trajectory_judge",
+        action="store_true",
+        help="Enable optional trajectory judge backend (deterministic score remains primary signal)",
+    )
+    parser.add_argument(
+        "--judge-model",
+        "--judge_model",
+        dest="judge_model",
+        default="qwen3-vl-plus",
+        help="Trajectory judge model name (used when --enable-trajectory-judge is set)",
+    )
+    parser.add_argument(
+        "--judge-api-key",
+        "--judge_api_key",
+        dest="judge_api_key",
+        help="Trajectory judge API key (falls back to JUDGE_API_KEY then API_KEY)",
+    )
+    parser.add_argument(
+        "--judge-api-base",
+        "--judge_api_base",
+        dest="judge_api_base",
+        help="Trajectory judge API base URL (optional OpenAI-compatible endpoint)",
+    )
 
 
 def configure_parser(subparsers: argparse._SubParsersAction) -> None:
@@ -255,6 +281,15 @@ async def execute(args: argparse.Namespace) -> None:
         skip_protocol_validation=getattr(args, "skip_protocol_validation", False),
         capability_policy_path=getattr(args, "capability_policy_path", None),
         mcp_tool_allowlist=getattr(args, "mcp_tool_allowlist", None),
+        enable_trajectory_judge=getattr(args, "enable_trajectory_judge", False),
+        judge_model=getattr(args, "judge_model", "qwen3-vl-plus"),
+        judge_api_key=(
+            getattr(args, "judge_api_key", None)
+            or os.getenv("JUDGE_API_KEY")
+            or args.api_key
+            or os.getenv("API_KEY")
+        ),
+        judge_api_base=getattr(args, "judge_api_base", None),
     )
     if run_all_tasks and task_results:
         total_duration = time.time() - start_time

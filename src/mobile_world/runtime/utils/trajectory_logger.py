@@ -75,6 +75,7 @@ LOG_FILE_NAME = "traj.json"
 CANONICAL_LOG_FILE_NAME = "traj.canonical.jsonl"
 CANONICAL_META_FILE_NAME = "traj.meta.json"
 SCORE_FILE_NAME = "result.txt"
+EVALUATOR_AUDIT_FILE_NAME = "evaluator_audit.json"
 
 
 class TrajLogger:
@@ -84,6 +85,7 @@ class TrajLogger:
         self.canonical_log_file_name = CANONICAL_LOG_FILE_NAME
         self.canonical_meta_file_name = CANONICAL_META_FILE_NAME
         self.score_file_name = SCORE_FILE_NAME
+        self.evaluator_audit_file_name = EVALUATOR_AUDIT_FILE_NAME
         self.screenshots_dir = "screenshots"
         self.marked_screenshots_dir = "marked_screenshots"
         self.tools = None
@@ -106,6 +108,8 @@ class TrajLogger:
         with open(os.path.join(self.log_file_dir, self.canonical_log_file_name), "w") as f:
             f.write("")
         with open(os.path.join(self.log_file_dir, self.canonical_meta_file_name), "w") as f:
+            json.dump({}, f)
+        with open(os.path.join(self.log_file_dir, self.evaluator_audit_file_name), "w") as f:
             json.dump({}, f)
 
     def _canonical_paths(self) -> tuple[str, str]:
@@ -142,7 +146,7 @@ class TrajLogger:
             tools=self.tools or [],
             metadata={"legacy_traj_file": self.log_file_name},
         ).model_dump()
-        for key in ("tool_manifest", "policy_manifest", "token_usage"):
+        for key in ("tool_manifest", "policy_manifest", "token_usage", "evaluator_audit"):
             if key in existing_meta:
                 header[key] = existing_meta[key]
         if token_usage is not None:
@@ -154,6 +158,16 @@ class TrajLogger:
         canonical_path, _ = self._canonical_paths()
         with open(canonical_path, "a", encoding="utf-8") as f:
             f.write(json.dumps(event, ensure_ascii=False) + "\n")
+
+    def artifact_paths(self) -> dict[str, str]:
+        canonical_log_path, canonical_meta_path = self._canonical_paths()
+        return {
+            "legacy_log_path": os.path.join(self.log_file_dir, self.log_file_name),
+            "canonical_log_path": canonical_log_path,
+            "canonical_meta_path": canonical_meta_path,
+            "score_path": os.path.join(self.log_file_dir, self.score_file_name),
+            "evaluator_audit_path": os.path.join(self.log_file_dir, self.evaluator_audit_file_name),
+        }
 
     def log_traj(
         self,
@@ -272,14 +286,59 @@ class TrajLogger:
             }
         )
 
-    def log_score(self, score: float, reason: str = "Unknown reason"):
+    def log_evaluator_audit(self, audit: dict) -> None:
+        """Persist evaluator audit payload for run-level score traceability."""
+        task_id = "0"
+        legacy_path = os.path.join(self.log_file_dir, self.log_file_name)
+        legacy = self._read_json_or_default(legacy_path, default={})
+        if task_id not in legacy:
+            legacy[task_id] = {"tools": self.tools, "traj": []}
+        legacy[task_id]["evaluator_audit"] = audit
+        with open(legacy_path, "w", encoding="utf-8") as f:
+            json.dump(legacy, f, ensure_ascii=False, indent=4)
+
+        audit_path = os.path.join(self.log_file_dir, self.evaluator_audit_file_name)
+        with open(audit_path, "w", encoding="utf-8") as f:
+            json.dump(audit, f, ensure_ascii=False, indent=4)
+
+        _, meta_path = self._canonical_paths()
+        meta = self._read_json_or_default(meta_path, default={})
+        meta["evaluator_audit"] = audit
+        with open(meta_path, "w", encoding="utf-8") as f:
+            json.dump(meta, f, ensure_ascii=False, indent=4)
+
+        self._append_canonical_event(
+            {
+                "type": "evaluator_audit",
+                "schema_version": "1.0.0",
+                "audit": audit,
+            }
+        )
+
+    def log_score(
+        self,
+        score: float,
+        reason: str = "Unknown reason",
+        *,
+        evaluator_name: str | None = None,
+        evidence_refs: list[dict] | None = None,
+    ):
         with open(os.path.join(self.log_file_dir, self.score_file_name), "w") as f:
             f.write(f"score: {score}\nreason: {reason}")
+            if evaluator_name:
+                f.write(f"\nevaluator: {evaluator_name}")
+            if evidence_refs:
+                f.write(
+                    "\nevidence_refs: "
+                    + json.dumps(evidence_refs, ensure_ascii=False, separators=(",", ":"))
+                )
         score_event = normalize_score_event(
             task_name=os.path.basename(self.log_file_dir),
             run_id=f"{os.path.basename(self.log_file_dir)}-0",
             score=score,
             reason=reason,
+            evaluator=evaluator_name,
+            evidence_refs=evidence_refs,
         )
         self._append_canonical_event(score_event.model_dump())
 
@@ -329,6 +388,12 @@ class TrajLogger:
         if os.path.exists(meta_path):
             backup_meta_path = os.path.join(self.log_file_dir, f"traj_meta_backup_{timestamp}.json")
             os.rename(meta_path, backup_meta_path)
+        evaluator_audit_path = os.path.join(self.log_file_dir, self.evaluator_audit_file_name)
+        if os.path.exists(evaluator_audit_path):
+            backup_eval_path = os.path.join(
+                self.log_file_dir, f"evaluator_audit_backup_{timestamp}.json"
+            )
+            os.rename(evaluator_audit_path, backup_eval_path)
 
         # Recreate directories and empty traj.json
         os.makedirs(screenshots_path, exist_ok=True)
@@ -338,6 +403,8 @@ class TrajLogger:
         with open(canonical_path, "w", encoding="utf-8") as f:
             f.write("")
         with open(meta_path, "w", encoding="utf-8") as f:
+            json.dump({}, f)
+        with open(evaluator_audit_path, "w", encoding="utf-8") as f:
             json.dump({}, f)
 
         self.tools = None

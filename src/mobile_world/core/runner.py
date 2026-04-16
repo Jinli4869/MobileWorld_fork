@@ -16,6 +16,11 @@ from mobile_world.runtime.client import (
     scan_finished_tasks,
 )
 from mobile_world.runtime.protocol.capability_policy import resolve_capability_policy
+from mobile_world.runtime.protocol.evaluator import (
+    BaseEvaluator,
+    EvaluatorInput,
+    create_evaluator,
+)
 from mobile_world.runtime.protocol.tool_router import UnifiedToolRouter
 from mobile_world.runtime.protocol.validation import ProtocolValidationError, run_protocol_preflight
 from mobile_world.runtime.utils.docker import (
@@ -35,6 +40,7 @@ def _execute_single_task(
     traj_logger: TrajLogger,
     tool_router: UnifiedToolRouter | None = None,
     enable_mcp: bool = False,
+    evaluator: BaseEvaluator | None = None,
 ) -> tuple[int, float]:
     """Execute a single task and return the number of steps and score.
 
@@ -117,15 +123,32 @@ def _execute_single_task(
             logger.debug("task steps reach max step, terminate")
             break
 
-    score, reason = env.get_task_score(task_type=task_name)
-    logger.debug(f"task_score: {score}, reason: {reason}")
-    traj_logger.log_score(score=score, reason=reason)
+    if evaluator is None:
+        evaluator = create_evaluator("task_native")
+    evaluation_result = evaluator.evaluate(
+        env,
+        EvaluatorInput(
+            task_name=task_name,
+            task_goal=task_goal,
+            run_id=f"{task_name}-0",
+            artifact_paths=traj_logger.artifact_paths(),
+            metadata={"max_step": max_step, "enable_mcp": enable_mcp},
+        ),
+    )
+    logger.debug(f"task_score: {evaluation_result.score}, reason: {evaluation_result.reason}")
+    traj_logger.log_evaluator_audit(evaluation_result.audit.model_dump())
+    traj_logger.log_score(
+        score=evaluation_result.score,
+        reason=evaluation_result.reason,
+        evaluator_name=evaluation_result.evaluator_name,
+        evidence_refs=[ref.model_dump() for ref in evaluation_result.evidence_refs],
+    )
 
     res = env.tear_down_task(task_type=task_name)
     agent.done()
     logger.debug(f"tear_down_task response: {res}")
 
-    return step, score
+    return step, evaluation_result.score
 
 
 def _process_task_on_env(
@@ -142,6 +165,10 @@ def _process_task_on_env(
     enable_user_interaction: bool = False,
     capability_policy_path: str | None = None,
     mcp_tool_allowlist: str | list[str] | None = None,
+    enable_trajectory_judge: bool = False,
+    judge_model: str = "qwen3-vl-plus",
+    judge_api_key: str | None = None,
+    judge_api_base: str | None = None,
     **kwargs,
 ) -> dict:
     """Process a single task on a specific environment.
@@ -222,6 +249,13 @@ def _process_task_on_env(
 
             traj_logger.log_tool_manifest(capability_decision.as_manifest())
             tool_router = UnifiedToolRouter(capability_decision)
+            evaluator = create_evaluator(
+                "task_native",
+                enable_trajectory_judge=enable_trajectory_judge,
+                judge_model=judge_model,
+                judge_api_key=judge_api_key,
+                judge_api_base=judge_api_base,
+            )
 
             agent = create_agent(agent_type, model_name, llm_base_url, api_key, env=env, **kwargs)
 
@@ -236,6 +270,7 @@ def _process_task_on_env(
                         traj_logger=traj_logger,
                         tool_router=tool_router,
                         enable_mcp=enable_mcp,
+                        evaluator=evaluator,
                     )
                     break
                 except Exception as e:
@@ -307,6 +342,10 @@ def run_agent_with_evaluation(
     skip_protocol_validation: bool = False,
     capability_policy_path: str | None = None,
     mcp_tool_allowlist: str | None = None,
+    enable_trajectory_judge: bool = False,
+    judge_model: str = "qwen3-vl-plus",
+    judge_api_key: str | None = None,
+    judge_api_base: str | None = None,
     **kwargs,
 ) -> list[dict]:
     """Run the agent and return the evaluation results.
@@ -411,6 +450,10 @@ def run_agent_with_evaluation(
                     enable_user_interaction=enable_user_interaction,
                     capability_policy_path=capability_policy_path,
                     mcp_tool_allowlist=mcp_tool_allowlist,
+                    enable_trajectory_judge=enable_trajectory_judge,
+                    judge_model=judge_model,
+                    judge_api_key=judge_api_key,
+                    judge_api_base=judge_api_base,
                     **kwargs,
                 )
                 for task_name in pending_tasks
