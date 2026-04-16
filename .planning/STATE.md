@@ -5,33 +5,33 @@
 See: .planning/PROJECT.md (updated 2026-04-16)
 
 **Core value:** One benchmark, one task standard, one evaluator contract, multiple agent frameworks with reproducible and comparable results.
-**Current focus:** Phase 1 — Protocol Baseline
+**Current focus:** Phase 2 — Tool Router & Capability Policy
 
 ## Current Position
 
-Phase: 1 of 7 (including inserted Phase 3.1) (Protocol Baseline)
+Phase: 2 of 7 (including inserted Phase 3.1) (Tool Router & Capability Policy)
 Plan: 0 of 4 in current phase
 Status: Ready to plan
-Last activity: 2026-04-16 — Expanded planning artifacts with KPI metrics requirements (tokens/TTFT/latency/cost/reliability)
+Last activity: 2026-04-17 — Completed Phase 1 execution (4/4 plans, protocol baseline landed)
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [█░░░░░░░░░] 14%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 0
-- Average duration: -
-- Total execution time: 0.0 hours
+- Total plans completed: 4
+- Average duration: 0.5 hours/plan
+- Total execution time: 2.0 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| - | - | - | - |
+| 1. Protocol Baseline | 4 | 2.0h | 0.5h |
 
 **Recent Trend:**
-- Last 5 plans: -
-- Trend: Stable
+- Last 5 plans: 01-01, 01-02, 01-03, 01-04
+- Trend: Positive
 
 *Updated after each plan completion*
 
@@ -64,5 +64,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-04-16 22:58
-Stopped at: Project initialization complete and ready for Phase 1 discussion/planning
+Stopped at: Phase 1 complete; Phase 2 ready for $gsd-plan-phase 2
 Resume file: None

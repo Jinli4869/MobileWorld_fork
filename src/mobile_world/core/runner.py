@@ -15,6 +15,7 @@ from mobile_world.runtime.client import (
     AndroidMCPEnvClient,
     scan_finished_tasks,
 )
+from mobile_world.runtime.protocol.validation import ProtocolValidationError, run_protocol_preflight
 from mobile_world.runtime.utils.docker import (
     discover_backends,
 )
@@ -251,6 +252,7 @@ def run_agent_with_evaluation(
     max_concurrency: int | None = None,
     shuffle_tasks: bool = False,
     auto_retry: int = 10,
+    skip_protocol_validation: bool = False,
     **kwargs,
 ) -> list[dict]:
     """Run the agent and return the evaluation results.
@@ -272,6 +274,19 @@ def run_agent_with_evaluation(
     Returns:
         list[dict]: The evaluation results for each task, containing task_name, success, score, steps, duration_seconds, env_url
     """
+
+    if skip_protocol_validation:
+        logger.warning("Protocol pre-flight validation explicitly skipped by CLI flag")
+    else:
+        try:
+            validation_report = run_protocol_preflight(strict=True)
+        except ProtocolValidationError:
+            logger.exception("Protocol pre-flight validation failed")
+            raise
+        logger.info(
+            "Protocol pre-flight passed. Checked adapters: {}",
+            validation_report.checked_adapters,
+        )
 
     container_names = None
     if aw_urls is None or len(aw_urls) == 0:

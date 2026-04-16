@@ -5,6 +5,8 @@ from datetime import datetime
 from loguru import logger
 from PIL import Image, ImageDraw
 
+from mobile_world.runtime.protocol.events import CanonicalTrajectoryHeader
+from mobile_world.runtime.protocol.normalization import normalize_score_event, normalize_step_event
 from mobile_world.runtime.utils.models import Observation
 
 
@@ -70,6 +72,8 @@ def draw_drag_on_image(image_path, output_path, drag_coords):
 
 
 LOG_FILE_NAME = "traj.json"
+CANONICAL_LOG_FILE_NAME = "traj.canonical.jsonl"
+CANONICAL_META_FILE_NAME = "traj.meta.json"
 SCORE_FILE_NAME = "result.txt"
 
 
@@ -77,6 +81,8 @@ class TrajLogger:
     def __init__(self, log_file_root: str, task_name: str):
         self.log_file_dir = os.path.join(log_file_root, task_name)
         self.log_file_name = LOG_FILE_NAME
+        self.canonical_log_file_name = CANONICAL_LOG_FILE_NAME
+        self.canonical_meta_file_name = CANONICAL_META_FILE_NAME
         self.score_file_name = SCORE_FILE_NAME
         self.screenshots_dir = "screenshots"
         self.marked_screenshots_dir = "marked_screenshots"
@@ -97,6 +103,41 @@ class TrajLogger:
         os.makedirs(os.path.join(self.log_file_dir, self.marked_screenshots_dir), exist_ok=True)
         with open(os.path.join(self.log_file_dir, self.log_file_name), "w") as f:
             json.dump({}, f)
+        with open(os.path.join(self.log_file_dir, self.canonical_log_file_name), "w") as f:
+            f.write("")
+        with open(os.path.join(self.log_file_dir, self.canonical_meta_file_name), "w") as f:
+            json.dump({}, f)
+
+    def _canonical_paths(self) -> tuple[str, str]:
+        return (
+            os.path.join(self.log_file_dir, self.canonical_log_file_name),
+            os.path.join(self.log_file_dir, self.canonical_meta_file_name),
+        )
+
+    def _write_canonical_meta(
+        self,
+        task_name: str,
+        task_goal: str,
+        task_id: str,
+        token_usage: dict[str, int] | None = None,
+    ) -> None:
+        _, meta_path = self._canonical_paths()
+        header = CanonicalTrajectoryHeader(
+            task_name=task_name,
+            task_goal=task_goal,
+            run_id=f"{task_name}-{task_id}",
+            tools=self.tools or [],
+            metadata={"legacy_traj_file": self.log_file_name},
+        ).model_dump()
+        if token_usage is not None:
+            header["token_usage"] = token_usage
+        with open(meta_path, "w") as f:
+            json.dump(header, f, ensure_ascii=False, indent=4)
+
+    def _append_canonical_event(self, event: dict) -> None:
+        canonical_path, _ = self._canonical_paths()
+        with open(canonical_path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(event, ensure_ascii=False) + "\n")
 
     def log_traj(
         self,
@@ -130,6 +171,18 @@ class TrajLogger:
 
         with open(os.path.join(self.log_file_dir, self.log_file_name), "w") as f:
             json.dump(log_data, f, ensure_ascii=False, indent=4)
+        self._write_canonical_meta(task_name, task_goal, task_id, token_usage=token_usage)
+        canonical_step = normalize_step_event(
+            task_name=task_name,
+            task_goal=task_goal,
+            run_id=f"{task_name}-{task_id}",
+            step=step,
+            prediction=prediction,
+            action=action,
+            observation=obs,
+            token_usage=token_usage,
+        )
+        self._append_canonical_event(canonical_step.model_dump())
 
         original_screenshot_path = os.path.join(
             self.log_file_dir, self.screenshots_dir, f"{task_name}-{task_id}-{step}.png"
@@ -158,10 +211,27 @@ class TrajLogger:
 
     def log_tools(self, tools: list[dict]):
         self.tools = tools
+        _, meta_path = self._canonical_paths()
+        if os.path.exists(meta_path):
+            try:
+                with open(meta_path, encoding="utf-8") as f:
+                    meta = json.load(f)
+            except json.JSONDecodeError:
+                meta = {}
+            meta["tools"] = tools
+            with open(meta_path, "w", encoding="utf-8") as f:
+                json.dump(meta, f, ensure_ascii=False, indent=4)
 
     def log_score(self, score: float, reason: str = "Unknown reason"):
         with open(os.path.join(self.log_file_dir, self.score_file_name), "w") as f:
             f.write(f"score: {score}\nreason: {reason}")
+        score_event = normalize_score_event(
+            task_name=os.path.basename(self.log_file_dir),
+            run_id=f"{os.path.basename(self.log_file_dir)}-0",
+            score=score,
+            reason=reason,
+        )
+        self._append_canonical_event(score_event.model_dump())
 
         # reset tools after logging score
         self.tools = None
@@ -175,6 +245,12 @@ class TrajLogger:
 
         with open(os.path.join(self.log_file_dir, self.log_file_name), "w") as f:
             json.dump(log_data, f, ensure_ascii=False, indent=4)
+        _, meta_path = self._canonical_paths()
+        with open(meta_path, encoding="utf-8") as f:
+            meta_data = json.load(f)
+        meta_data["token_usage"] = token_usage
+        with open(meta_path, "w", encoding="utf-8") as f:
+            json.dump(meta_data, f, ensure_ascii=False, indent=4)
 
     def reset_traj(self):
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -194,11 +270,25 @@ class TrajLogger:
         if os.path.exists(traj_path):
             backup_traj_path = os.path.join(self.log_file_dir, f"traj_backup_{timestamp}.json")
             os.rename(traj_path, backup_traj_path)
+        canonical_path = os.path.join(self.log_file_dir, self.canonical_log_file_name)
+        if os.path.exists(canonical_path):
+            backup_canonical_path = os.path.join(
+                self.log_file_dir, f"traj_canonical_backup_{timestamp}.jsonl"
+            )
+            os.rename(canonical_path, backup_canonical_path)
+        meta_path = os.path.join(self.log_file_dir, self.canonical_meta_file_name)
+        if os.path.exists(meta_path):
+            backup_meta_path = os.path.join(self.log_file_dir, f"traj_meta_backup_{timestamp}.json")
+            os.rename(meta_path, backup_meta_path)
 
         # Recreate directories and empty traj.json
         os.makedirs(screenshots_path, exist_ok=True)
         os.makedirs(marked_path, exist_ok=True)
         with open(traj_path, "w") as f:
+            json.dump({}, f)
+        with open(canonical_path, "w", encoding="utf-8") as f:
+            f.write("")
+        with open(meta_path, "w", encoding="utf-8") as f:
             json.dump({}, f)
 
         self.tools = None

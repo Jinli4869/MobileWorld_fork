@@ -13,12 +13,19 @@ from loguru import logger
 from mobile_world.agents.base import BaseAgent
 from mobile_world.agents.implementations.gelab_agent import GelabAgent
 from mobile_world.agents.implementations.general_e2e_agent import GeneralE2EAgentMCP
+from mobile_world.agents.implementations.gui_owl_1_5 import GUIOWL15AgentMCP
 from mobile_world.agents.implementations.mai_ui_agent import MAIUINaivigationAgent
 from mobile_world.agents.implementations.planner_executor import PlannerExecutorAgentMCP
 from mobile_world.agents.implementations.qwen3vl import Qwen3VLAgentMCP
 from mobile_world.agents.implementations.seed_agent import SeedAgent
 from mobile_world.agents.implementations.ui_venus_agent import VenusNaviAgent
-from mobile_world.agents.implementations.gui_owl_1_5 import GUIOWL15AgentMCP
+from mobile_world.runtime.protocol.adapter import AdapterProfile, FrameworkAdapter, LegacyAgentAdapter
+from mobile_world.runtime.protocol.registry import (
+    get_adapter_registration,
+    has_adapter,
+    list_adapters as list_protocol_adapters,
+    register_adapter as register_protocol_adapter,
+)
 
 AGENT_CONFIGS = {
     "qwen3vl": {
@@ -46,6 +53,77 @@ AGENT_CONFIGS = {
         "class": GUIOWL15AgentMCP,
     },
 }
+
+
+def register_adapter_profile(
+    profile_name: str,
+    *,
+    framework: str,
+    adapter_class: type[FrameworkAdapter],
+    factory=None,
+    capabilities: list[str] | None = None,
+    metadata: dict | None = None,
+    overwrite: bool = False,
+) -> None:
+    """Register one protocol adapter profile."""
+    profile = AdapterProfile(
+        name=profile_name,
+        framework=framework,
+        capabilities=capabilities or [],
+        metadata=metadata or {},
+    )
+    register_protocol_adapter(
+        profile=profile,
+        adapter_class=adapter_class,
+        factory=factory,
+        overwrite=overwrite,
+    )
+
+
+def register_builtin_protocol_adapters() -> None:
+    """Register all built-in agents into the protocol adapter registry."""
+    for agent_name in AGENT_CONFIGS:
+        if has_adapter(agent_name):
+            continue
+        register_adapter_profile(
+            agent_name,
+            framework="mobile_world_builtin",
+            adapter_class=LegacyAgentAdapter,
+            capabilities=["legacy_agent", "gui_action"],
+            metadata={"source": "mobile_world.agents.registry"},
+        )
+
+
+def list_framework_profiles() -> list[str]:
+    """List registered protocol adapter profile names."""
+    return [profile.name for profile in list_protocol_adapters()]
+
+
+def create_framework_adapter(
+    profile_name: str,
+    model_name: str,
+    llm_base_url: str,
+    api_key: str = "empty",
+    **kwargs,
+) -> FrameworkAdapter:
+    """Create framework adapter instance from profile."""
+    registration = get_adapter_registration(profile_name)
+    if registration.factory is not None:
+        return registration.factory(
+            model_name=model_name,
+            llm_base_url=llm_base_url,
+            api_key=api_key,
+            **kwargs,
+        )
+
+    legacy_agent = create_agent(
+        profile_name,
+        model_name=model_name,
+        llm_base_url=llm_base_url,
+        api_key=api_key,
+        **kwargs,
+    )
+    return registration.adapter_class(legacy_agent)
 
 
 def load_agent_from_file(file_path: str) -> type[BaseAgent]:
@@ -140,3 +218,6 @@ def create_agent(
         api_key=api_key,
         **kwargs,
     )
+
+
+register_builtin_protocol_adapters()

@@ -10,7 +10,7 @@ This roadmap upgrades MobileWorld from built-in-agent evaluation to a protocol-d
 - Integer phases (1, 2, 3): Planned milestone work
 - Decimal phases (2.1, 2.2): Urgent insertions (marked with INSERTED)
 
-- [ ] **Phase 1: Protocol Baseline** - Define adapter, action/tool, and trajectory contracts
+- [x] **Phase 1: Protocol Baseline** - Define adapter, action/tool, and trajectory contracts
 - [ ] **Phase 2: Tool Router & Capability Policy** - Unify GUI/MCP/ask-user routing with deterministic controls
 - [ ] **Phase 3: Evaluator Unification** - Centralize scoring and optional trajectory judge integration
 - [ ] **Phase 3.1: Metrics Instrumentation & KPI Contracts (INSERTED)** - Add token/latency/cost/reliability KPI capture and definitions
@@ -32,10 +32,10 @@ This roadmap upgrades MobileWorld from built-in-agent evaluation to a protocol-d
 **Plans**: 4 plans
 
 Plans:
-- [ ] 01-01: Define adapter protocol models and base interfaces
-- [ ] 01-02: Define canonical action/tool/trace event schemas
-- [ ] 01-03: Integrate protocol validation gates into runner startup
-- [ ] 01-04: Add baseline regression tests for built-in agent compatibility
+- [x] 01-01: Define adapter protocol models and base interfaces
+- [x] 01-02: Define canonical action/tool/trace event schemas
+- [x] 01-03: Integrate protocol validation gates into runner startup
+- [x] 01-04: Add baseline regression tests for built-in agent compatibility
 
 ### Phase 2: Tool Router & Capability Policy
 **Goal**: Enforce consistent and deterministic tool behavior across frameworks.
@@ -142,7 +142,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 3.1 -> 4 -> 5 -> 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Protocol Baseline | 0/4 | Not started | - |
+| 1. Protocol Baseline | 4/4 | Completed | 2026-04-17 |
 | 2. Tool Router & Capability Policy | 0/4 | Not started | - |
 | 3. Evaluator Unification | 0/4 | Not started | - |
 | 3.1. Metrics Instrumentation & KPI Contracts | 0/4 | Not started | - |

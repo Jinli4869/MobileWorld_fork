@@ -140,6 +140,13 @@ def _add_common_arguments(parser: argparse.ArgumentParser) -> None:
         default=1000,
         help="Scale factor for coordinate conversion (default: 1000)",
     )
+    parser.add_argument(
+        "--skip-protocol-validation",
+        "--skip_protocol_validation",
+        dest="skip_protocol_validation",
+        action="store_true",
+        help="Skip protocol pre-flight validation (debug only)",
+    )
 
 
 def configure_parser(subparsers: argparse._SubParsersAction) -> None:
@@ -233,6 +240,7 @@ async def execute(args: argparse.Namespace) -> None:
         shuffle_tasks=args.shuffle_tasks,
         scale_factor=getattr(args, "scale_factor", 1000),
         auto_retry=args.auto_retry,
+        skip_protocol_validation=getattr(args, "skip_protocol_validation", False),
     )
     if run_all_tasks and task_results:
         total_duration = time.time() - start_time

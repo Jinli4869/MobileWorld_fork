@@ -7,10 +7,10 @@
 
 ### Adapter Contracts
 
-- [ ] **ADPT-01**: Framework adapter can be registered by name/profile and discovered by the eval runner.
-- [ ] **ADPT-02**: Adapter lifecycle includes standardized `initialize`, `step`, `finalize`, and `emit_artifacts` behavior.
-- [ ] **ADPT-03**: Adapter outputs canonical action/tool events instead of framework-native opaque payloads.
-- [ ] **ADPT-04**: Adapter contract validation reports actionable schema errors before benchmark execution starts.
+- [x] **ADPT-01**: Framework adapter can be registered by name/profile and discovered by the eval runner.
+- [x] **ADPT-02**: Adapter lifecycle includes standardized `initialize`, `step`, `finalize`, and `emit_artifacts` behavior.
+- [x] **ADPT-03**: Adapter outputs canonical action/tool events instead of framework-native opaque payloads.
+- [x] **ADPT-04**: Adapter contract validation reports actionable schema errors before benchmark execution starts.
 
 ### Tool Routing & Capability Policy
 
@@ -38,7 +38,7 @@
 
 ### Trajectory & Artifacts
 
-- [ ] **TRCE-01**: All runs persist a canonical versioned trajectory schema regardless of framework source.
+- [x] **TRCE-01**: All runs persist a canonical versioned trajectory schema regardless of framework source.
 - [ ] **TRCE-02**: Historical trajectory formats can be converted or wrapped into the canonical schema.
 - [ ] **TRCE-03**: Aggregated reports can compare multiple frameworks on identical task subsets and settings.
 
@@ -76,11 +76,11 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| ADPT-01 | Phase 1 | Pending |
-| ADPT-02 | Phase 1 | Pending |
-| ADPT-03 | Phase 1 | Pending |
-| ADPT-04 | Phase 1 | Pending |
-| TRCE-01 | Phase 1 | Pending |
+| ADPT-01 | Phase 1 | Completed |
+| ADPT-02 | Phase 1 | Completed |
+| ADPT-03 | Phase 1 | Completed |
+| ADPT-04 | Phase 1 | Completed |
+| TRCE-01 | Phase 1 | Completed |
 | TOOL-01 | Phase 2 | Pending |
 | TOOL-02 | Phase 2 | Pending |
 | TOOL-03 | Phase 2 | Pending |
@@ -113,4 +113,4 @@
 
 ---
 *Requirements defined: 2026-04-16*
-*Last updated: 2026-04-16 after metrics requirement expansion*
+*Last updated: 2026-04-17 after Phase 1 protocol baseline execution*

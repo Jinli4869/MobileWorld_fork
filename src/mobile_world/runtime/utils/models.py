@@ -27,6 +27,7 @@ MCP = "mcp"
 ENV_FAIL = "error_env"
 DEFAULT_IMAGE = "ghcr.io/tongyi-mai/mobile_world:latest"
 DEFAULT_NAME_PREFIX = "mobile_world_env"
+CANONICAL_TRAJECTORY_SCHEMA_VERSION = "1.0.0"
 _ACTION_TYPES = (
     CLICK,
     DOUBLE_TAP,
@@ -485,6 +486,15 @@ class Observation(BaseModel):
     accessibility_tree: Any = None
     ask_user_response: str | None = None
     tool_call: Any | None = None
+
+
+class TokenUsage(BaseModel):
+    """Canonical token usage shape shared across adapters."""
+
+    completion_tokens: int = 0
+    prompt_tokens: int = 0
+    cached_tokens: int = 0
+    total_tokens: int = 0
 
 
 # Environment/Docker Models

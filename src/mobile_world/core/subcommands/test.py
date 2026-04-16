@@ -8,6 +8,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.text import Text
 
+from ...runtime.protocol.validation import run_protocol_preflight
 from ..user_task_runner import run_user_task
 from .eval import _add_common_arguments
 
@@ -37,6 +38,8 @@ def configure_parser(subparsers: argparse._SubParsersAction) -> None:
 async def execute(args: argparse.Namespace) -> None:
     """Execute the test command."""
     log_file_root = args.log_file_root or args.output or "./traj_logs"
+    if not getattr(args, "skip_protocol_validation", False):
+        run_protocol_preflight(strict=True)
 
     if args.device is None:
         devices = subprocess.check_output(["adb", "devices"]).decode("utf-8").splitlines()
