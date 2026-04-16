@@ -9,10 +9,10 @@ See: .planning/PROJECT.md (updated 2026-04-16)
 
 ## Current Position
 
-Phase: 1 of 6 (Protocol Baseline)
+Phase: 1 of 7 (including inserted Phase 3.1) (Protocol Baseline)
 Plan: 0 of 4 in current phase
 Status: Ready to plan
-Last activity: 2026-04-16 — Initialized project docs, requirements, roadmap, and research artifacts
+Last activity: 2026-04-16 — Expanded planning artifacts with KPI metrics requirements (tokens/TTFT/latency/cost/reliability)
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -53,6 +53,7 @@ None yet.
 
 - Need explicit phase planning decisions for OpenClaw and hermes adapter surface details.
 - Need calibrated policy for deterministic score vs optional LLM judge disagreement handling.
+- Need provider-specific TTFT fallback policy (`native`, `estimated`, `unavailable`) to keep KPI semantics consistent.
 
 ## Deferred Items
 

@@ -26,6 +26,16 @@
 - [ ] **EVAL-03**: Optional trajectory judge (LLM-based) can be enabled with explicit model/config recording.
 - [ ] **EVAL-04**: Evaluator outputs include score, reason, and evidence references for auditability.
 
+### Metrics & Telemetry
+
+- [ ] **METR-01**: System records per-step token usage (`prompt`, `completion`, `cached`, `total`) and reports average tokens per step per task/run.
+- [ ] **METR-02**: System records TTFT at model turn level and aggregates task/run TTFT with explicit handling for providers that do not expose native TTFT.
+- [ ] **METR-03**: System records TTFA, TTS, step latency p50/p95, and tool latency p50/p95 for all frameworks.
+- [ ] **METR-04**: System reports efficiency/cost metrics including tokens per success and cost per success.
+- [ ] **METR-05**: System reports reliability metrics including tool success rate, tool retry rate, and invalid action rate.
+- [ ] **METR-06**: System reports stability metrics including reproducibility variance across repeated fixed-config runs.
+- [ ] **METR-07**: System reports evaluator quality metrics including deterministic evaluator vs LLM-judge agreement rate.
+
 ### Trajectory & Artifacts
 
 - [ ] **TRCE-01**: All runs persist a canonical versioned trajectory schema regardless of framework source.
@@ -79,21 +89,28 @@
 | EVAL-02 | Phase 3 | Pending |
 | EVAL-03 | Phase 3 | Pending |
 | EVAL-04 | Phase 3 | Pending |
+| METR-01 | Phase 3.1 | Pending |
+| METR-02 | Phase 3.1 | Pending |
+| METR-03 | Phase 3.1 | Pending |
+| METR-05 | Phase 3.1 | Pending |
 | INTG-01 | Phase 4 | Pending |
 | COMP-01 | Phase 4 | Pending |
 | INTG-02 | Phase 5 | Pending |
 | INTG-03 | Phase 5 | Pending |
 | INTG-04 | Phase 5 | Pending |
+| METR-04 | Phase 6 | Pending |
+| METR-06 | Phase 6 | Pending |
+| METR-07 | Phase 6 | Pending |
 | TRCE-02 | Phase 6 | Pending |
 | TRCE-03 | Phase 6 | Pending |
 | COMP-02 | Phase 6 | Pending |
 | COMP-03 | Phase 6 | Pending |
 
 **Coverage:**
-- v1 requirements: 22 total
-- Mapped to phases: 22
+- v1 requirements: 29 total
+- Mapped to phases: 29
 - Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-04-16*
-*Last updated: 2026-04-16 after initial definition*
+*Last updated: 2026-04-16 after metrics requirement expansion*

@@ -25,6 +25,7 @@ One benchmark, one task standard, one evaluator contract, multiple agent framewo
 - [ ] Unify trajectory schema so outputs from built-in agents and external frameworks can be judged and compared consistently.
 - [ ] Add first-party adapter reference implementation using nanobot/OpenGUI integration patterns.
 - [ ] Add CLI/API workflows for framework registration, running eval by framework profile, and cross-framework leaderboard export.
+- [ ] Add a standardized benchmark KPI system (tokens, TTFT/TTFA/TTS, latency percentiles, tool reliability, cost efficiency, reproducibility, judge agreement) with consistent cross-framework definitions.
 
 ### Out of Scope
 
@@ -37,6 +38,16 @@ One benchmark, one task standard, one evaluator contract, multiple agent framewo
 
 MobileWorld currently has strong benchmark fundamentals: reproducible snapshots, task registry, deterministic task scoring, and practical CLI flows (`mw eval`, `mw test`). However, current architecture tightly couples evaluation execution with built-in agent implementations and a fixed MCP setup (DashScope/ModelScope servers configured in code). In parallel, nanobot/OpenGUI practices show a cleaner host-adapter pattern: protocol boundaries, tool registry, MCP dynamic registration, and reusable evaluator modules. This upgrade should absorb those proven patterns into MobileWorld while preserving existing task corpus and environment orchestration.
 
+The current benchmark outputs are still score-centric. For production-quality framework comparison, we also need standardized efficiency/reliability KPIs, including per-step token usage, TTFT/TTFA, end-to-end latency, tool reliability, and cost-per-success metrics.
+
+## Evaluation KPI Pack (v1)
+
+- **Efficiency**: average tokens per step, tokens per success, average steps to success, cost per success
+- **Latency**: TTFT, TTFA, TTS, step latency p50/p95, tool latency p50/p95
+- **Reliability**: tool success rate, tool retry rate, invalid action rate
+- **Stability**: reproducibility variance across repeated runs under fixed config
+- **Evaluation quality**: deterministic evaluator vs LLM-judge agreement rate
+
 ## Constraints
 
 - **Compatibility**: Existing CLI paths and built-in agents must continue to run — avoid breaking current users.
@@ -44,6 +55,7 @@ MobileWorld currently has strong benchmark fundamentals: reproducible snapshots,
 - **Runtime boundary**: Keep task/server/runtime ownership inside MobileWorld; external frameworks integrate through adapters, not by bypassing server contracts.
 - **MCP safety**: Tool registration and invocation must support allowlisting/timeouts and fail-safe behavior.
 - **Evaluator integrity**: Cross-framework comparisons require normalized trajectory artifacts and stable scoring policy.
+- **Metric integrity**: KPI definitions must be provider-agnostic and auditable; missing fields need explicit fallback/unknown semantics.
 - **Tech stack**: Python 3.12 project with existing FastAPI + uv runtime and Android emulator workflow.
 
 ## Key Decisions
@@ -54,6 +66,7 @@ MobileWorld currently has strong benchmark fundamentals: reproducible snapshots,
 | Keep existing task definitions and server task APIs as canonical benchmark contract | Protects existing benchmark assets and reproducibility guarantees | — Pending |
 | Introduce unified tool/evaluator protocol in MobileWorld core | Ensures fair comparison across frameworks and enables extensibility | — Pending |
 | Use nanobot/OpenGUI integration as primary reference implementation for v1 adapters | Existing local reference is available and validates architecture choices quickly | — Pending |
+| Adopt a standard KPI pack as first-class benchmark output | Score-only comparison is insufficient for real-world framework tradeoff analysis | — Pending |
 
 ## Evolution
 

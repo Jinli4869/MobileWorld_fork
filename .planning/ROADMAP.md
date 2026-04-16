@@ -2,7 +2,7 @@
 
 ## Overview
 
-This roadmap upgrades MobileWorld from built-in-agent evaluation to a protocol-driven benchmark platform for OpenClaw/nanobot/hermes-style frameworks. The execution order prioritizes contract correctness, deterministic tool/evaluator behavior, real adapter validation, and final comparability hardening.
+This roadmap upgrades MobileWorld from built-in-agent evaluation to a protocol-driven benchmark platform for OpenClaw/nanobot/hermes-style frameworks. The execution order prioritizes contract correctness, deterministic tool/evaluator behavior, standardized benchmark metrics (tokens/TTFT/latency/cost/reliability), real adapter validation, and final comparability hardening.
 
 ## Phases
 
@@ -13,6 +13,7 @@ This roadmap upgrades MobileWorld from built-in-agent evaluation to a protocol-d
 - [ ] **Phase 1: Protocol Baseline** - Define adapter, action/tool, and trajectory contracts
 - [ ] **Phase 2: Tool Router & Capability Policy** - Unify GUI/MCP/ask-user routing with deterministic controls
 - [ ] **Phase 3: Evaluator Unification** - Centralize scoring and optional trajectory judge integration
+- [ ] **Phase 3.1: Metrics Instrumentation & KPI Contracts (INSERTED)** - Add token/latency/cost/reliability KPI capture and definitions
 - [ ] **Phase 4: Nanobot Reference Integration** - Validate architecture with nanobot/OpenGUI adapter
 - [ ] **Phase 5: Framework Expansion & CLI Profiles** - Add OpenClaw/hermes scaffolds and framework-oriented commands
 - [ ] **Phase 6: Reporting, Conformance & Reproducibility** - Finalize cross-framework comparison and QA guarantees
@@ -70,14 +71,31 @@ Plans:
 - [ ] 03-03: Integrate trajectory judge backend with explicit config recording
 - [ ] 03-04: Add evaluator audit output and score consistency checks
 
+### Phase 3.1: Metrics Instrumentation & KPI Contracts (INSERTED)
+**Goal**: Make benchmark efficiency, latency, cost, and reliability metrics first-class and comparable.
+**Depends on**: Phase 3
+**Requirements**: METR-01, METR-02, METR-03, METR-05
+**Success Criteria** (what must be TRUE):
+1. Per-step token accounting is captured and queryable for built-in and adapter runs.
+2. TTFT, TTFA, TTS, step latency p50/p95, and tool latency p50/p95 are emitted in standardized run artifacts.
+3. Tool success rate, tool retry rate, and invalid action rate are computed per task/profile/run.
+4. Metrics quality flags explicitly mark native vs estimated vs unavailable fields.
+**Plans**: 4 plans
+
+Plans:
+- [ ] 03.1-01: Add canonical metrics event schema and telemetry hooks
+- [ ] 03.1-02: Add token/TTFT collection adapters with provider fallback policy
+- [ ] 03.1-03: Add latency/reliability aggregators and per-run KPI summaries
+- [ ] 03.1-04: Add KPI validation tests and metrics quality flagging
+
 ### Phase 4: Nanobot Reference Integration
 **Goal**: Prove adapter architecture end-to-end with nanobot/OpenGUI.
-**Depends on**: Phase 3
+**Depends on**: Phase 3.1
 **Requirements**: INTG-01, COMP-01
 **Success Criteria** (what must be TRUE):
 1. Nanobot/OpenGUI adapter can run selected MobileWorld tasks end-to-end.
 2. Legacy built-in agents still run unchanged via existing CLI pathways.
-3. Adapter run artifacts and built-in run artifacts are structurally comparable.
+3. Adapter run artifacts and built-in run artifacts are structurally comparable, including KPI fields.
 **Plans**: 3 plans
 
 Plans:
@@ -103,30 +121,31 @@ Plans:
 ### Phase 6: Reporting, Conformance & Reproducibility
 **Goal**: Finalize trustworthy cross-framework comparison outputs.
 **Depends on**: Phase 5
-**Requirements**: TRCE-02, TRCE-03, COMP-02, COMP-03
+**Requirements**: METR-04, METR-06, METR-07, TRCE-02, TRCE-03, COMP-02, COMP-03
 **Success Criteria** (what must be TRUE):
 1. Historical and new traces can be converted/aggregated under canonical schema.
-2. Cross-framework result reports are generated for identical task sets.
-3. Conformance suite validates adapter/tool/evaluator contract integrity.
-4. Repeated runs under identical config satisfy reproducibility thresholds.
+2. Cross-framework result reports are generated for identical task sets, including token/cost/latency/reliability KPI panels.
+3. Conformance suite validates adapter/tool/evaluator/metrics contract integrity.
+4. Repeated runs under identical config satisfy reproducibility thresholds, and judge agreement metrics are reported.
 **Plans**: 4 plans
 
 Plans:
 - [ ] 06-01: Implement trace schema versioning and converter utilities
-- [ ] 06-02: Implement cross-framework aggregation and leaderboard report output
-- [ ] 06-03: Build adapter conformance CLI and test suite
-- [ ] 06-04: Add reproducibility regression workflow and thresholds
+- [ ] 06-02: Implement cross-framework aggregation and KPI-enriched leaderboard report output
+- [ ] 06-03: Build adapter conformance CLI and test suite (including metrics conformance)
+- [ ] 06-04: Add reproducibility/judge-agreement workflow and thresholds
 
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
+Phases execute in numeric order: 1 -> 2 -> 3 -> 3.1 -> 4 -> 5 -> 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Protocol Baseline | 0/4 | Not started | - |
 | 2. Tool Router & Capability Policy | 0/4 | Not started | - |
 | 3. Evaluator Unification | 0/4 | Not started | - |
+| 3.1. Metrics Instrumentation & KPI Contracts | 0/4 | Not started | - |
 | 4. Nanobot Reference Integration | 0/3 | Not started | - |
 | 5. Framework Expansion & CLI Profiles | 0/3 | Not started | - |
 | 6. Reporting, Conformance & Reproducibility | 0/4 | Not started | - |
