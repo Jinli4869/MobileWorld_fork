@@ -16,6 +16,16 @@ from rich.text import Text
 from ..runner import run_agent_with_evaluation
 
 
+def load_framework_config(path: str) -> dict:
+    """Load framework profile config JSON for eval runs."""
+    config_path = Path(path).expanduser()
+    with open(config_path, encoding="utf-8") as f:
+        payload = json.load(f)
+    if not isinstance(payload, dict):
+        raise ValueError(f"Framework config must be a JSON object: {config_path}")
+    return payload
+
+
 def _add_common_arguments(parser: argparse.ArgumentParser) -> None:
     """Add common arguments shared between eval and test commands."""
     parser.add_argument(
@@ -185,6 +195,24 @@ def _add_common_arguments(parser: argparse.ArgumentParser) -> None:
         dest="judge_api_base",
         help="Trajectory judge API base URL (optional OpenAI-compatible endpoint)",
     )
+    parser.add_argument(
+        "--framework-profile",
+        "--framework_profile",
+        dest="framework_profile",
+        help="Optional protocol adapter profile to run via framework adapter mode (e.g. nanobot_opengui)",
+    )
+    parser.add_argument(
+        "--framework-config",
+        "--framework_config",
+        dest="framework_config",
+        help="Path to JSON config file providing framework_profile and related adapter options",
+    )
+    parser.add_argument(
+        "--nanobot-fork-path",
+        "--nanobot_fork_path",
+        dest="nanobot_fork_path",
+        help="Path to nanobot_fork workspace for OpenGUI reference adapter integration",
+    )
 
 
 def configure_parser(subparsers: argparse._SubParsersAction) -> None:
@@ -240,6 +268,25 @@ def configure_parser(subparsers: argparse._SubParsersAction) -> None:
 async def execute(args: argparse.Namespace) -> None:
     """Execute the eval command."""
     log_file_root = args.log_file_root or args.output or "./traj_logs"
+    framework_profile = getattr(args, "framework_profile", None)
+    nanobot_fork_path = getattr(args, "nanobot_fork_path", None)
+    judge_model = getattr(args, "judge_model", "qwen3-vl-plus")
+    judge_api_base = getattr(args, "judge_api_base", None)
+    judge_api_key = (
+        getattr(args, "judge_api_key", None)
+        or os.getenv("JUDGE_API_KEY")
+        or args.api_key
+        or os.getenv("API_KEY")
+    )
+
+    framework_config_path = getattr(args, "framework_config", None)
+    if framework_config_path:
+        config_payload = load_framework_config(framework_config_path)
+        framework_profile = config_payload.get("framework_profile", framework_profile)
+        nanobot_fork_path = config_payload.get("nanobot_fork_path", nanobot_fork_path)
+        judge_model = config_payload.get("judge_model", judge_model)
+        judge_api_base = config_payload.get("judge_api_base", judge_api_base)
+        judge_api_key = config_payload.get("judge_api_key", judge_api_key)
 
     # Check if running all tasks
     run_all_tasks = args.task and args.task.upper() == "ALL"
@@ -282,14 +329,11 @@ async def execute(args: argparse.Namespace) -> None:
         capability_policy_path=getattr(args, "capability_policy_path", None),
         mcp_tool_allowlist=getattr(args, "mcp_tool_allowlist", None),
         enable_trajectory_judge=getattr(args, "enable_trajectory_judge", False),
-        judge_model=getattr(args, "judge_model", "qwen3-vl-plus"),
-        judge_api_key=(
-            getattr(args, "judge_api_key", None)
-            or os.getenv("JUDGE_API_KEY")
-            or args.api_key
-            or os.getenv("API_KEY")
-        ),
-        judge_api_base=getattr(args, "judge_api_base", None),
+        judge_model=judge_model,
+        judge_api_key=judge_api_key,
+        judge_api_base=judge_api_base,
+        framework_profile=framework_profile,
+        nanobot_fork_path=nanobot_fork_path,
     )
     if run_all_tasks and task_results:
         total_duration = time.time() - start_time
@@ -298,6 +342,20 @@ async def execute(args: argparse.Namespace) -> None:
 
         successful_tasks = sum(1 for result in task_results if result["score"] > 0.99)
         overall_success_rate = successful_tasks / total_tasks if total_tasks > 0 else 0.0
+        metric_rows = [result.get("metrics") for result in task_results if result.get("metrics")]
+        avg_tokens_per_step = []
+        ttft_ms = []
+        tool_success_rate = []
+        for metrics in metric_rows:
+            token_usage = metrics.get("token_usage", {})
+            latency = metrics.get("latency", {})
+            reliability = metrics.get("reliability", {})
+            if token_usage.get("avg_total_tokens_per_step") is not None:
+                avg_tokens_per_step.append(float(token_usage["avg_total_tokens_per_step"]))
+            if latency.get("ttft_ms") is not None:
+                ttft_ms.append(float(latency["ttft_ms"]))
+            if reliability.get("tool_success_rate") is not None:
+                tool_success_rate.append(float(reliability["tool_success_rate"]))
 
         report = {
             "summary": {
@@ -307,6 +365,17 @@ async def execute(args: argparse.Namespace) -> None:
                 "total_tasks_with_no_results": len(task_list_with_no_results),
                 "overall_success_rate": overall_success_rate,
                 "total_duration_seconds": total_duration,
+                "kpi": {
+                    "avg_tokens_per_step_run_mean": round(sum(avg_tokens_per_step) / len(avg_tokens_per_step), 3)
+                    if avg_tokens_per_step
+                    else None,
+                    "avg_ttft_ms_run_mean": round(sum(ttft_ms) / len(ttft_ms), 3) if ttft_ms else None,
+                    "avg_tool_success_rate_run_mean": round(
+                        sum(tool_success_rate) / len(tool_success_rate), 6
+                    )
+                    if tool_success_rate
+                    else None,
+                },
             },
             "metadata": {
                 "agent_type": args.agent_type,

@@ -16,6 +16,7 @@ from mobile_world.core.api.info import (
     get_task_info,
     get_task_registry,
     get_task_statistics,
+    list_framework_profiles_info,
     list_agents,
     list_apps,
     list_mcp_tools,
@@ -77,6 +78,18 @@ def configure_parser(subparsers: argparse._SubParsersAction) -> None:
         type=str,
         default=None,
         help="Filter agents by type (case-insensitive substring match)",
+    )
+
+    # Framework subcommand
+    framework_parser = info_subparsers.add_parser(
+        "framework",
+        help="Display framework adapter profile information",
+    )
+    framework_parser.add_argument(
+        "--filter",
+        type=str,
+        default=None,
+        help="Filter framework profiles by name (case-insensitive substring match)",
     )
 
     # App subcommand
@@ -344,6 +357,39 @@ def display_agents_info(console: Console, name_filter: str | None = None) -> Non
     console.print("\n", usage_panel)
 
 
+def display_frameworks_info(console: Console, name_filter: str | None = None) -> None:
+    """Display information about registered framework adapter profiles."""
+    profiles = list_framework_profiles_info(name_filter=name_filter)
+    if not profiles:
+        if name_filter:
+            console.print(f"[yellow]No framework profiles found matching filter '{name_filter}'[/yellow]")
+        else:
+            console.print("[yellow]No framework profiles registered[/yellow]")
+        return
+
+    table = Table(title="[bold cyan]Framework Profiles[/bold cyan]", show_lines=True)
+    table.add_column("Profile", style="cyan", no_wrap=True)
+    table.add_column("Framework", style="white")
+    table.add_column("Capabilities", style="green")
+    table.add_column("Conformance", style="yellow")
+    table.add_column("Source", style="magenta")
+
+    for profile in profiles:
+        capabilities = ", ".join(profile.capabilities) if profile.capabilities else "-"
+        source = profile.source or "-"
+        status = "PASS" if profile.conformance == "pass" else "FAIL"
+        table.add_row(profile.profile_name, profile.framework, capabilities, status, source)
+
+    console.print(table)
+    console.print(f"\n[bold]Total framework profiles:[/bold] {len(profiles)}")
+    failing = [profile for profile in profiles if profile.conformance == "fail"]
+    if failing:
+        console.print("[bold yellow]Profiles with conformance issues:[/bold yellow]")
+        for profile in failing:
+            issues = ", ".join(profile.issues) if profile.issues else "unknown"
+            console.print(f"  • {profile.profile_name}: {issues}")
+
+
 async def display_mcp_info(
     console: Console,
     tool_name: str | None = None,
@@ -575,6 +621,12 @@ async def execute(args: argparse.Namespace) -> None:
             app_name=args.name if hasattr(args, "name") else None,
             name_filter=args.filter if hasattr(args, "filter") else None,
         )
+
+    elif args.info_command == "framework":
+        header = Text("MobileWorld Framework Profiles", style="bold magenta")
+        console.print(Panel(header, border_style="magenta"))
+        console.print()
+        display_frameworks_info(console, name_filter=args.filter if hasattr(args, "filter") else None)
 
     elif args.info_command == "mcp":
         header = Text("MobileWorld MCP Tools", style="bold magenta")

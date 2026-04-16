@@ -10,6 +10,8 @@ from loguru import logger
 
 from mobile_world.agents.registry import AGENT_CONFIGS
 from mobile_world.runtime.mcp_server import init_mcp_clients
+from mobile_world.runtime.protocol.registry import list_registrations
+from mobile_world.runtime.protocol.validation import validate_adapter_contracts
 from mobile_world.tasks.registry import TaskRegistry
 
 
@@ -72,6 +74,18 @@ class TaskStatistics:
     tag_counts: dict[str, int] = field(default_factory=dict)
 
 
+@dataclass
+class FrameworkProfileInfo:
+    """Information about one registered framework profile."""
+
+    profile_name: str
+    framework: str
+    capabilities: list[str] = field(default_factory=list)
+    source: str | None = None
+    conformance: str = "unknown"
+    issues: list[str] = field(default_factory=list)
+
+
 def get_task_registry(suite_family: str = "mobile_world"):
     """Get the appropriate task registry based on suite_family.
 
@@ -82,6 +96,39 @@ def get_task_registry(suite_family: str = "mobile_world"):
         Task registry instance
     """
     return TaskRegistry()
+
+
+def list_framework_profiles_info(name_filter: str | None = None) -> list[FrameworkProfileInfo]:
+    """List registered framework profiles with conformance status."""
+    registrations = list_registrations()
+    report = validate_adapter_contracts()
+
+    issue_map: dict[str, list[str]] = {}
+    for issue in report.issues:
+        for registration in registrations:
+            profile_name = registration.profile.name
+            if profile_name in issue.message:
+                issue_map.setdefault(profile_name, []).append(issue.code)
+
+    infos: list[FrameworkProfileInfo] = []
+    for registration in registrations:
+        profile = registration.profile
+        if name_filter and name_filter.lower() not in profile.name.lower():
+            continue
+        source = profile.metadata.get("source") if isinstance(profile.metadata, dict) else None
+        issues = issue_map.get(profile.name, [])
+        infos.append(
+            FrameworkProfileInfo(
+                profile_name=profile.name,
+                framework=profile.framework,
+                capabilities=list(profile.capabilities),
+                source=source,
+                conformance="pass" if not issues else "fail",
+                issues=issues,
+            )
+        )
+    infos.sort(key=lambda item: item.profile_name.lower())
+    return infos
 
 
 def get_task_info(

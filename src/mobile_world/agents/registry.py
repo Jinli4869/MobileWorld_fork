@@ -19,6 +19,9 @@ from mobile_world.agents.implementations.planner_executor import PlannerExecutor
 from mobile_world.agents.implementations.qwen3vl import Qwen3VLAgentMCP
 from mobile_world.agents.implementations.seed_agent import SeedAgent
 from mobile_world.agents.implementations.ui_venus_agent import VenusNaviAgent
+from mobile_world.runtime.adapters.hermes_template import HermesTemplateAdapter
+from mobile_world.runtime.adapters.nanobot_opengui import NanobotOpenGUIAdapter
+from mobile_world.runtime.adapters.openclaw_template import OpenClawTemplateAdapter
 from mobile_world.runtime.protocol.adapter import AdapterProfile, FrameworkAdapter, LegacyAgentAdapter
 from mobile_world.runtime.protocol.registry import (
     get_adapter_registration,
@@ -91,6 +94,62 @@ def register_builtin_protocol_adapters() -> None:
             adapter_class=LegacyAgentAdapter,
             capabilities=["legacy_agent", "gui_action"],
             metadata={"source": "mobile_world.agents.registry"},
+        )
+
+
+def _nanobot_opengui_factory(**kwargs) -> FrameworkAdapter:
+    return NanobotOpenGUIAdapter(
+        model_name=kwargs.get("model_name"),
+        llm_base_url=kwargs.get("llm_base_url"),
+        api_key=kwargs.get("api_key"),
+        nanobot_fork_path=kwargs.get("nanobot_fork_path"),
+    )
+
+
+def _openclaw_template_factory(**kwargs) -> FrameworkAdapter:
+    return OpenClawTemplateAdapter(
+        model_name=kwargs.get("model_name"),
+        llm_base_url=kwargs.get("llm_base_url"),
+        api_key=kwargs.get("api_key"),
+    )
+
+
+def _hermes_template_factory(**kwargs) -> FrameworkAdapter:
+    return HermesTemplateAdapter(
+        model_name=kwargs.get("model_name"),
+        llm_base_url=kwargs.get("llm_base_url"),
+        api_key=kwargs.get("api_key"),
+    )
+
+
+def register_reference_framework_adapters() -> None:
+    """Register reference external framework adapters."""
+    if not has_adapter("nanobot_opengui"):
+        register_adapter_profile(
+            "nanobot_opengui",
+            framework="nanobot_opengui",
+            adapter_class=NanobotOpenGUIAdapter,
+            factory=_nanobot_opengui_factory,
+            capabilities=["gui_action", "trajectory_judge"],
+            metadata={"source": "mobile_world.runtime.adapters.nanobot_opengui", "reference": True},
+        )
+    if not has_adapter("openclaw_template"):
+        register_adapter_profile(
+            "openclaw_template",
+            framework="openclaw",
+            adapter_class=OpenClawTemplateAdapter,
+            factory=_openclaw_template_factory,
+            capabilities=["gui_action", "template"],
+            metadata={"source": "mobile_world.runtime.adapters.openclaw_template", "template": True},
+        )
+    if not has_adapter("hermes_template"):
+        register_adapter_profile(
+            "hermes_template",
+            framework="hermes",
+            adapter_class=HermesTemplateAdapter,
+            factory=_hermes_template_factory,
+            capabilities=["gui_action", "template"],
+            metadata={"source": "mobile_world.runtime.adapters.hermes_template", "template": True},
         )
 
 
@@ -221,3 +280,4 @@ def create_agent(
 
 
 register_builtin_protocol_adapters()
+register_reference_framework_adapters()
