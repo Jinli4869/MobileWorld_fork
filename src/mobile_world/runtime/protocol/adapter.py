@@ -115,6 +115,14 @@ class FrameworkAdapter(ABC):
         raise NotImplementedError
 
 
+TERMINAL_ACTION_TYPES = {"finished", "answer", "unknown", "error_env"}
+
+
+def is_terminal_action(action_type: str | None) -> bool:
+    """Return whether one canonical action type should terminate execution."""
+    return action_type in TERMINAL_ACTION_TYPES
+
+
 class LegacyAgentAdapter(FrameworkAdapter):
     """Bridge adapter wrapping current built-in `BaseAgent` behavior."""
 
@@ -144,7 +152,7 @@ class LegacyAgentAdapter(FrameworkAdapter):
             if hasattr(action, "model_dump")
             else dict(action) if isinstance(action, dict) else {"raw_action": str(action)}
         )
-        done = action_payload.get("action_type") in {"finished", "answer", "unknown", "error_env"}
+        done = is_terminal_action(action_payload.get("action_type"))
         return AdapterStepResult(
             prediction=prediction,
             action=action_payload,
@@ -162,4 +170,3 @@ class LegacyAgentAdapter(FrameworkAdapter):
 
     def emit_artifacts(self, run_id: str, output_dir: str) -> AdapterArtifactsResult:
         return AdapterArtifactsResult(artifacts=[])
-

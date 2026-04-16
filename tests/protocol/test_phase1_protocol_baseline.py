@@ -62,6 +62,7 @@ def test_builtin_profiles_registered():
     profiles = set(list_framework_profiles())
     expected = set(AGENT_CONFIGS.keys())
     assert expected.issubset(profiles)
+    assert "nanobot_opengui" in profiles
 
 
 def test_adapter_contract_validation_reports_invalid_registration():

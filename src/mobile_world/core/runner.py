@@ -1,3 +1,4 @@
+import json
 import os
 import random
 import threading
@@ -9,11 +10,18 @@ from joblib import Parallel, delayed
 from loguru import logger
 
 from mobile_world.agents.base import BaseAgent, MCPAgent
-from mobile_world.agents.registry import create_agent
+from mobile_world.agents.registry import create_agent, create_framework_adapter
 from mobile_world.runtime.client import (
     AndroidEnvClient,
     AndroidMCPEnvClient,
     scan_finished_tasks,
+)
+from mobile_world.runtime.protocol.adapter import (
+    AdapterFinalizeInput,
+    AdapterInitializeInput,
+    AdapterStepInput,
+    FrameworkAdapter,
+    is_terminal_action,
 )
 from mobile_world.runtime.protocol.capability_policy import resolve_capability_policy
 from mobile_world.runtime.protocol.evaluator import (
@@ -21,26 +29,29 @@ from mobile_world.runtime.protocol.evaluator import (
     EvaluatorInput,
     create_evaluator,
 )
+from mobile_world.runtime.protocol.metrics import MetricsCollector
 from mobile_world.runtime.protocol.tool_router import UnifiedToolRouter
 from mobile_world.runtime.protocol.validation import ProtocolValidationError, run_protocol_preflight
 from mobile_world.runtime.utils.docker import (
     discover_backends,
 )
-from mobile_world.runtime.utils.models import ANSWER, ENV_FAIL, FINISHED, UNKNOWN
-from mobile_world.runtime.utils.trajectory_logger import TrajLogger
+from mobile_world.runtime.utils.models import ANSWER, UNKNOWN, JSONAction
+from mobile_world.runtime.utils.trajectory_logger import METRICS_FILE_NAME, TrajLogger
 
 load_dotenv()
 
 
 def _execute_single_task(
     env: AndroidEnvClient,
-    agent: BaseAgent,
+    agent: BaseAgent | None,
     task_name: str,
     max_step: int,
     traj_logger: TrajLogger,
     tool_router: UnifiedToolRouter | None = None,
     enable_mcp: bool = False,
     evaluator: BaseEvaluator | None = None,
+    framework_adapter: FrameworkAdapter | None = None,
+    framework_options: dict | None = None,
 ) -> tuple[int, float]:
     """Execute a single task and return the number of steps and score.
 
@@ -50,7 +61,7 @@ def _execute_single_task(
 
     logger.debug(f"max_step: {max_step}")
 
-    if enable_mcp and not isinstance(agent, MCPAgent):
+    if enable_mcp and framework_adapter is None and not isinstance(agent, MCPAgent):
         logger.error(
             "MCP is enabled but agent type is not a MCP agent. Please use a MCP agent type."
         )
@@ -61,45 +72,132 @@ def _execute_single_task(
 
     logger.debug(f"task_goal: {task_goal}")
 
+    run_id = f"{task_name}-0"
     step = 0
     obs = env.initialize_task(task_name=task_name)
-    agent.initialize(task_goal)
+    if framework_adapter is None:
+        if agent is None:
+            raise ValueError("agent must be provided when framework_adapter is not set")
+        agent.initialize(task_goal)
+    else:
+        adapter_options = dict(framework_options or {})
+        adapter_options.setdefault("output_dir", traj_logger.log_file_dir)
+        init_result = framework_adapter.initialize(
+            AdapterInitializeInput(
+                task_name=task_name,
+                task_goal=task_goal,
+                run_id=run_id,
+                options=adapter_options,
+            )
+        )
+        if not init_result.ok:
+            raise RuntimeError(f"Framework adapter initialize failed: {init_result.message}")
+    metrics_collector = MetricsCollector(
+        task_name=task_name,
+        run_id=run_id,
+        task_started_at=time.perf_counter(),
+    )
 
     while True:
         step += 1
+        step_started_at = time.perf_counter()
 
         logger.debug(f"Screenshot captured in step {step}")
 
-        prediction, action = agent.predict(
-            {
-                "screenshot": obs.screenshot,
-                "tool_call": obs.tool_call,
-                "ask_user_response": obs.ask_user_response,
+        adapter_done = False
+        observation_payload = {
+            "screenshot": obs.screenshot,
+            "tool_call": obs.tool_call,
+            "ask_user_response": obs.ask_user_response,
+        }
+        if framework_adapter is not None:
+            step_result = framework_adapter.step(
+                AdapterStepInput(
+                    run_id=run_id,
+                    task_name=task_name,
+                    step_index=step,
+                    observation=observation_payload,
+                )
+            )
+            prediction = step_result.prediction
+            adapter_done = step_result.done
+            action_dict = step_result.action if isinstance(step_result.action, dict) else {}
+            try:
+                action = JSONAction(**action_dict)
+            except Exception:
+                action = JSONAction(action_type=UNKNOWN)
+            action_payload = action.model_dump(exclude_none=True)
+            adapter_token_usage = None
+            if isinstance(step_result.info, dict):
+                token_candidate = step_result.info.get("token_usage")
+                if isinstance(token_candidate, dict):
+                    adapter_token_usage = token_candidate
+            total_token_usage = adapter_token_usage
+        else:
+            assert agent is not None
+            prediction, action = agent.predict(observation_payload)  # for backward compatibility
+            action_payload = action.model_dump(exclude_none=True)
+            total_token_usage = agent.get_total_token_usage()
+        prediction_done_at = time.perf_counter()
+        if total_token_usage is None:
+            total_token_usage = {
+                "completion_tokens": 0,
+                "prompt_tokens": 0,
+                "cached_tokens": 0,
+                "total_tokens": 0,
             }
-        )  # for backward compatibility
+        step_preview = metrics_collector.preview_step(
+            step=step,
+            action_type=action.action_type,
+            step_started_at=step_started_at,
+            prediction_done_at=prediction_done_at,
+            total_usage=total_token_usage,
+        )
         traj_logger.log_traj(
             task_name,
             task_goal,
             step,
             prediction,
-            action.model_dump(exclude_none=True),
+            action_payload,
             obs,
-            agent.get_total_token_usage(),
+            total_token_usage,
+            step_info={
+                "step_token_usage": step_preview["token_usage_step"],
+                "predict_latency_ms": step_preview["predict_latency_ms"],
+            },
         )
         if prediction is None:
             logger.warning(f"Agent prediction failed in step {step}")
+            step_metrics = metrics_collector.complete_step(
+                step_preview=step_preview,
+                step_finished_at=time.perf_counter(),
+                tool_latency_ms=None,
+                tool_attempted=False,
+                tool_success=False,
+                tool_retry=False,
+                invalid_action=True,
+            )
+            traj_logger.log_step_metrics(step=step, metrics=step_metrics)
             break
 
         terminate = False
+        tool_latency_ms = None
+        tool_attempted = False
+        tool_success = False
+        tool_retry = False
+        invalid_action = action.action_type in [UNKNOWN, None]
         logger.debug(f"current step {step}")
 
-        if action.action_type in [ENV_FAIL, FINISHED, UNKNOWN]:
+        if is_terminal_action(action.action_type) and action.action_type != ANSWER:
             logger.debug(f"task terminated in step {step} with action {action.action_type}")
             terminate = True
         else:
             logger.debug(f"execution action {action}")
+            tool_attempted = True
+            dispatch_started_at = time.perf_counter()
             if tool_router is not None:
                 dispatch_result = tool_router.dispatch(env, action)
+                tool_latency_ms = round((time.perf_counter() - dispatch_started_at) * 1000.0, 3)
                 if not dispatch_result.ok:
                     normalized_error = dispatch_result.error.model_dump() if dispatch_result.error else {}
                     traj_logger.log_tool_error(step=step, error=normalized_error)
@@ -108,14 +206,31 @@ def _execute_single_task(
                         step,
                         normalized_error,
                     )
+                    tool_success = False
+                    tool_retry = bool(dispatch_result.error and dispatch_result.error.retryable)
                     terminate = True
                 else:
+                    tool_success = True
                     if dispatch_result.observation is not None:
                         obs = dispatch_result.observation
             else:
                 obs = env.execute_action(action)
+                tool_latency_ms = round((time.perf_counter() - dispatch_started_at) * 1000.0, 3)
+                tool_success = True
             if action.action_type in [ANSWER]:
                 terminate = True
+            if framework_adapter is not None and adapter_done:
+                terminate = True
+        step_metrics = metrics_collector.complete_step(
+            step_preview=step_preview,
+            step_finished_at=time.perf_counter(),
+            tool_latency_ms=tool_latency_ms,
+            tool_attempted=tool_attempted,
+            tool_success=tool_success,
+            tool_retry=tool_retry,
+            invalid_action=invalid_action,
+        )
+        traj_logger.log_step_metrics(step=step, metrics=step_metrics)
         if terminate:
             break
 
@@ -130,11 +245,13 @@ def _execute_single_task(
         EvaluatorInput(
             task_name=task_name,
             task_goal=task_goal,
-            run_id=f"{task_name}-0",
+            run_id=run_id,
             artifact_paths=traj_logger.artifact_paths(),
             metadata={"max_step": max_step, "enable_mcp": enable_mcp},
         ),
     )
+    metrics_summary, _ = metrics_collector.finalize(score_recorded_at=time.perf_counter())
+    traj_logger.log_metrics_summary(task_name=task_name, run_id=run_id, summary=metrics_summary)
     logger.debug(f"task_score: {evaluation_result.score}, reason: {evaluation_result.reason}")
     traj_logger.log_evaluator_audit(evaluation_result.audit.model_dump())
     traj_logger.log_score(
@@ -143,9 +260,25 @@ def _execute_single_task(
         evaluator_name=evaluation_result.evaluator_name,
         evidence_refs=[ref.model_dump() for ref in evaluation_result.evidence_refs],
     )
+    if framework_adapter is not None:
+        finalize_result = framework_adapter.finalize(
+            AdapterFinalizeInput(
+                run_id=run_id,
+                task_name=task_name,
+                score=evaluation_result.score,
+                reason=evaluation_result.reason,
+                metrics=metrics_summary,
+            )
+        )
+        if not finalize_result.ok:
+            logger.warning("Framework adapter finalize returned non-ok for task {}", task_name)
+        artifacts = framework_adapter.emit_artifacts(run_id=run_id, output_dir=traj_logger.log_file_dir)
+        if artifacts.artifacts:
+            traj_logger.log_adapter_artifacts([item.model_dump() for item in artifacts.artifacts])
 
     res = env.tear_down_task(task_type=task_name)
-    agent.done()
+    if agent is not None:
+        agent.done()
     logger.debug(f"tear_down_task response: {res}")
 
     return step, evaluation_result.score
@@ -169,6 +302,8 @@ def _process_task_on_env(
     judge_model: str = "qwen3-vl-plus",
     judge_api_key: str | None = None,
     judge_api_base: str | None = None,
+    framework_profile: str | None = None,
+    nanobot_fork_path: str | None = None,
     **kwargs,
 ) -> dict:
     """Process a single task on a specific environment.
@@ -257,7 +392,24 @@ def _process_task_on_env(
                 judge_api_base=judge_api_base,
             )
 
-            agent = create_agent(agent_type, model_name, llm_base_url, api_key, env=env, **kwargs)
+            framework_adapter: FrameworkAdapter | None = None
+            agent: BaseAgent | None = None
+            framework_options: dict | None = None
+            if framework_profile:
+                framework_adapter = create_framework_adapter(
+                    framework_profile,
+                    model_name=model_name,
+                    llm_base_url=llm_base_url,
+                    api_key=api_key,
+                    env=env,
+                    nanobot_fork_path=nanobot_fork_path,
+                    **kwargs,
+                )
+                framework_options = {
+                    "nanobot_fork_path": nanobot_fork_path,
+                }
+            else:
+                agent = create_agent(agent_type, model_name, llm_base_url, api_key, env=env, **kwargs)
 
             task_start_time = time.time()
             while True:
@@ -271,6 +423,8 @@ def _process_task_on_env(
                         tool_router=tool_router,
                         enable_mcp=enable_mcp,
                         evaluator=evaluator,
+                        framework_adapter=framework_adapter,
+                        framework_options=framework_options,
                     )
                     break
                 except Exception as e:
@@ -346,6 +500,8 @@ def run_agent_with_evaluation(
     judge_model: str = "qwen3-vl-plus",
     judge_api_key: str | None = None,
     judge_api_base: str | None = None,
+    framework_profile: str | None = None,
+    nanobot_fork_path: str | None = None,
     **kwargs,
 ) -> list[dict]:
     """Run the agent and return the evaluation results.
@@ -454,6 +610,8 @@ def run_agent_with_evaluation(
                     judge_model=judge_model,
                     judge_api_key=judge_api_key,
                     judge_api_base=judge_api_base,
+                    framework_profile=framework_profile,
+                    nanobot_fork_path=nanobot_fork_path,
                     **kwargs,
                 )
                 for task_name in pending_tasks
@@ -485,7 +643,21 @@ def run_agent_with_evaluation(
     # Build final results from scan (authoritative source)
     success_task_results = []
     for task_name, score in zip(finished_task_list, finished_scores):
-        success_task_results.append({"task_name": task_name, "score": score})
+        metrics_summary = None
+        metrics_path = os.path.join(log_file_root, task_name, METRICS_FILE_NAME)
+        if os.path.exists(metrics_path):
+            try:
+                with open(metrics_path, encoding="utf-8") as f:
+                    metrics_summary = json.load(f)
+            except Exception:
+                logger.exception("Failed to parse metrics summary for task {}", task_name)
+        success_task_results.append(
+            {
+                "task_name": task_name,
+                "score": score,
+                "metrics": metrics_summary,
+            }
+        )
 
     task_list_with_no_results = [task for task in task_list if task not in finished_task_list]
     logger.info(f"Final: {len(success_task_results)} tasks with results, {len(task_list_with_no_results)} with no results")
