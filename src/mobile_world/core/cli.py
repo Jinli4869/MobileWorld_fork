@@ -27,6 +27,7 @@ def create_parser() -> argparse.ArgumentParser:
     subcommands.configure_env_parser(subparsers)
     subcommands.configure_info_parser(subparsers)
     subcommands.configure_eval_server_parser(subparsers)
+    subcommands.configure_benchmark_parser(subparsers)
 
     return parser
 
@@ -52,6 +53,8 @@ async def async_main() -> None:
         await subcommands.execute_info(args)
     elif args.command == "eval-server":
         await subcommands.execute_eval_server(args)
+    elif args.command == "benchmark":
+        await subcommands.execute_benchmark(args)
     else:
         parser.print_help()
         sys.exit(1)

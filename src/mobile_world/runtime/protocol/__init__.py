@@ -1,6 +1,7 @@
 """Protocol package for framework adapters and canonical trajectory contracts."""
 
 from mobile_world.runtime.protocol.adapter import (
+    TERMINAL_ACTION_TYPES,
     AdapterArtifactsResult,
     AdapterFinalizeInput,
     AdapterFinalizeResult,
@@ -12,6 +13,7 @@ from mobile_world.runtime.protocol.adapter import (
     ArtifactRecord,
     FrameworkAdapter,
     LegacyAgentAdapter,
+    is_terminal_action,
 )
 from mobile_world.runtime.protocol.capability_policy import (
     CapabilityDecision,
@@ -19,12 +21,11 @@ from mobile_world.runtime.protocol.capability_policy import (
     CapabilityPolicyRule,
     resolve_capability_policy,
 )
-from mobile_world.runtime.protocol.events import (
-    CANONICAL_TRAJECTORY_SCHEMA_VERSION,
-    CanonicalScoreEvent,
-    CanonicalStepEvent,
-    CanonicalTrajectoryHeader,
-    MetricsQualityFlags,
+from mobile_world.runtime.protocol.conformance import (
+    run_conformance_suite,
+    validate_evaluator_audit,
+    validate_metrics_summary,
+    validate_task_artifacts,
 )
 from mobile_world.runtime.protocol.evaluator import (
     BaseEvaluator,
@@ -42,6 +43,15 @@ from mobile_world.runtime.protocol.evaluator import (
     list_evaluators,
     register_evaluator,
 )
+from mobile_world.runtime.protocol.events import (
+    CANONICAL_TRAJECTORY_SCHEMA_VERSION,
+    CanonicalMetricsEvent,
+    CanonicalScoreEvent,
+    CanonicalStepEvent,
+    CanonicalTrajectoryHeader,
+    MetricsQualityFlags,
+)
+from mobile_world.runtime.protocol.metrics import MetricsCollector
 from mobile_world.runtime.protocol.registry import (
     AdapterRegistration,
     clear_adapters,
@@ -51,11 +61,24 @@ from mobile_world.runtime.protocol.registry import (
     list_registrations,
     register_adapter,
 )
+from mobile_world.runtime.protocol.reporting import (
+    TaskRunRecord,
+    aggregate_framework_runs,
+    load_task_run_records,
+    write_report,
+)
+from mobile_world.runtime.protocol.reproducibility import evaluate_reproducibility
 from mobile_world.runtime.protocol.tool_router import (
     NormalizedToolError,
     ToolDispatchResult,
     UnifiedToolRouter,
     classify_action_type,
+)
+from mobile_world.runtime.protocol.trace_converter import (
+    LEGACY_TRAJECTORY_SCHEMA_VERSION,
+    TRACE_CONVERTER_VERSION,
+    convert_legacy_directory,
+    convert_legacy_trajectory,
 )
 from mobile_world.runtime.protocol.validation import (
     ProtocolValidationError,
@@ -79,6 +102,7 @@ __all__ = [
     "ArtifactRecord",
     "BaseEvaluator",
     "CANONICAL_TRAJECTORY_SCHEMA_VERSION",
+    "CanonicalMetricsEvent",
     "CapabilityDecision",
     "CapabilityPolicyConfig",
     "CapabilityPolicyRule",
@@ -91,11 +115,17 @@ __all__ = [
     "EvaluatorResult",
     "EvidenceReference",
     "FrameworkAdapter",
+    "LEGACY_TRAJECTORY_SCHEMA_VERSION",
+    "TRACE_CONVERTER_VERSION",
+    "TERMINAL_ACTION_TYPES",
+    "is_terminal_action",
     "LegacyAgentAdapter",
     "MetricsQualityFlags",
+    "MetricsCollector",
     "NormalizedToolError",
     "ProtocolValidationError",
     "TaskNativeEvaluator",
+    "TaskRunRecord",
     "ToolDispatchResult",
     "TrajectoryJudgeConfig",
     "TrajectoryJudgeVerdict",
@@ -109,6 +139,7 @@ __all__ = [
     "get_evaluator_factory",
     "get_adapter_registration",
     "has_adapter",
+    "load_task_run_records",
     "list_adapters",
     "list_evaluators",
     "list_registrations",
@@ -116,6 +147,15 @@ __all__ = [
     "register_adapter",
     "resolve_capability_policy",
     "run_protocol_preflight",
+    "run_conformance_suite",
+    "validate_evaluator_audit",
+    "validate_metrics_summary",
+    "validate_task_artifacts",
     "validate_adapter_contracts",
     "validate_canonical_schema",
+    "convert_legacy_trajectory",
+    "convert_legacy_directory",
+    "aggregate_framework_runs",
+    "write_report",
+    "evaluate_reproducibility",
 ]

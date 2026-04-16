@@ -28,32 +28,32 @@
 
 ### Metrics & Telemetry
 
-- [ ] **METR-01**: System records per-step token usage (`prompt`, `completion`, `cached`, `total`) and reports average tokens per step per task/run.
-- [ ] **METR-02**: System records TTFT at model turn level and aggregates task/run TTFT with explicit handling for providers that do not expose native TTFT.
-- [ ] **METR-03**: System records TTFA, TTS, step latency p50/p95, and tool latency p50/p95 for all frameworks.
-- [ ] **METR-04**: System reports efficiency/cost metrics including tokens per success and cost per success.
-- [ ] **METR-05**: System reports reliability metrics including tool success rate, tool retry rate, and invalid action rate.
-- [ ] **METR-06**: System reports stability metrics including reproducibility variance across repeated fixed-config runs.
-- [ ] **METR-07**: System reports evaluator quality metrics including deterministic evaluator vs LLM-judge agreement rate.
+- [x] **METR-01**: System records per-step token usage (`prompt`, `completion`, `cached`, `total`) and reports average tokens per step per task/run.
+- [x] **METR-02**: System records TTFT at model turn level and aggregates task/run TTFT with explicit handling for providers that do not expose native TTFT.
+- [x] **METR-03**: System records TTFA, TTS, step latency p50/p95, and tool latency p50/p95 for all frameworks.
+- [x] **METR-04**: System reports efficiency/cost metrics including tokens per success and cost per success.
+- [x] **METR-05**: System reports reliability metrics including tool success rate, tool retry rate, and invalid action rate.
+- [x] **METR-06**: System reports stability metrics including reproducibility variance across repeated fixed-config runs.
+- [x] **METR-07**: System reports evaluator quality metrics including deterministic evaluator vs LLM-judge agreement rate.
 
 ### Trajectory & Artifacts
 
 - [x] **TRCE-01**: All runs persist a canonical versioned trajectory schema regardless of framework source.
-- [ ] **TRCE-02**: Historical trajectory formats can be converted or wrapped into the canonical schema.
-- [ ] **TRCE-03**: Aggregated reports can compare multiple frameworks on identical task subsets and settings.
+- [x] **TRCE-02**: Historical trajectory formats can be converted or wrapped into the canonical schema.
+- [x] **TRCE-03**: Aggregated reports can compare multiple frameworks on identical task subsets and settings.
 
 ### Integration & CLI Workflows
 
-- [ ] **INTG-01**: Nanobot/OpenGUI reference adapter can execute MobileWorld tasks end-to-end.
-- [ ] **INTG-02**: OpenClaw and hermes adapter scaffolds are provided with implementation guide and examples.
-- [ ] **INTG-03**: CLI can run eval by framework profile and emit comparable result artifacts.
-- [ ] **INTG-04**: CLI can list registered frameworks, supported capabilities, and conformance status.
+- [x] **INTG-01**: Nanobot/OpenGUI reference adapter can execute MobileWorld tasks end-to-end.
+- [x] **INTG-02**: OpenClaw and hermes adapter scaffolds are provided with implementation guide and examples.
+- [x] **INTG-03**: CLI can run eval by framework profile and emit comparable result artifacts.
+- [x] **INTG-04**: CLI can list registered frameworks, supported capabilities, and conformance status.
 
 ### Compatibility & QA
 
-- [ ] **COMP-01**: Existing built-in agent eval/test workflows remain functional without adapter migration.
-- [ ] **COMP-02**: Conformance test suite validates adapter contract, tool routing, and evaluator output shape.
-- [ ] **COMP-03**: Regression tests ensure benchmark reproducibility between repeated runs under same config.
+- [x] **COMP-01**: Existing built-in agent eval/test workflows remain functional without adapter migration.
+- [x] **COMP-02**: Conformance test suite validates adapter contract, tool routing, and evaluator output shape.
+- [x] **COMP-03**: Regression tests ensure benchmark reproducibility between repeated runs under same config.
 
 ## v2 Requirements
 
@@ -89,22 +89,22 @@
 | EVAL-02 | Phase 3 | Completed |
 | EVAL-03 | Phase 3 | Completed |
 | EVAL-04 | Phase 3 | Completed |
-| METR-01 | Phase 3.1 | Pending |
-| METR-02 | Phase 3.1 | Pending |
-| METR-03 | Phase 3.1 | Pending |
-| METR-05 | Phase 3.1 | Pending |
-| INTG-01 | Phase 4 | Pending |
-| COMP-01 | Phase 4 | Pending |
-| INTG-02 | Phase 5 | Pending |
-| INTG-03 | Phase 5 | Pending |
-| INTG-04 | Phase 5 | Pending |
-| METR-04 | Phase 6 | Pending |
-| METR-06 | Phase 6 | Pending |
-| METR-07 | Phase 6 | Pending |
-| TRCE-02 | Phase 6 | Pending |
-| TRCE-03 | Phase 6 | Pending |
-| COMP-02 | Phase 6 | Pending |
-| COMP-03 | Phase 6 | Pending |
+| METR-01 | Phase 3.1 | Completed |
+| METR-02 | Phase 3.1 | Completed |
+| METR-03 | Phase 3.1 | Completed |
+| METR-05 | Phase 3.1 | Completed |
+| INTG-01 | Phase 4 | Complete |
+| COMP-01 | Phase 4 | Complete |
+| INTG-02 | Phase 5 | Complete |
+| INTG-03 | Phase 5 | Complete |
+| INTG-04 | Phase 5 | Complete |
+| METR-04 | Phase 6 | Complete |
+| METR-06 | Phase 6 | Complete |
+| METR-07 | Phase 6 | Complete |
+| TRCE-02 | Phase 6 | Complete |
+| TRCE-03 | Phase 6 | Complete |
+| COMP-02 | Phase 6 | Complete |
+| COMP-03 | Phase 6 | Complete |
 
 **Coverage:**
 - v1 requirements: 29 total
@@ -113,4 +113,4 @@
 
 ---
 *Requirements defined: 2026-04-16*
-*Last updated: 2026-04-17 after Phase 3 evaluator unification execution*
+*Last updated: 2026-04-17 after Phase 6 reporting/conformance/reproducibility execution*

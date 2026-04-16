@@ -1,11 +1,15 @@
 """Subcommands for the MobileWorld CLI."""
 
+from .benchmark import configure_parser as configure_benchmark_parser
+from .benchmark import execute as execute_benchmark
 from .device import configure_parser as configure_device_parser
 from .device import execute as execute_device
 from .env import configure_parser as configure_env_parser
 from .env import execute as execute_env
 from .eval import configure_parser as configure_eval_parser
 from .eval import execute as execute_eval
+from .eval_server import configure_parser as configure_eval_server_parser
+from .eval_server import execute as execute_eval_server
 from .info import configure_parser as configure_info_parser
 from .info import execute as execute_info
 from .logs import configure_parser as configure_logs_parser
@@ -14,8 +18,6 @@ from .server import configure_parser as configure_server_parser
 from .server import execute as execute_server
 from .test import configure_parser as configure_test_parser
 from .test import execute as execute_test
-from .eval_server import configure_parser as configure_eval_server_parser
-from .eval_server import execute as execute_eval_server
 
 __all__ = [
     "configure_server_parser",
@@ -26,6 +28,8 @@ __all__ = [
     "execute_test",
     "configure_device_parser",
     "execute_device",
+    "configure_benchmark_parser",
+    "execute_benchmark",
     "configure_logs_parser",
     "execute_logs",
     "configure_env_parser",

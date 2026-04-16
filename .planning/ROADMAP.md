@@ -13,10 +13,10 @@ This roadmap upgrades MobileWorld from built-in-agent evaluation to a protocol-d
 - [x] **Phase 1: Protocol Baseline** - Define adapter, action/tool, and trajectory contracts
 - [x] **Phase 2: Tool Router & Capability Policy** - Unify GUI/MCP/ask-user routing with deterministic controls
 - [x] **Phase 3: Evaluator Unification** - Centralize scoring and optional trajectory judge integration
-- [ ] **Phase 3.1: Metrics Instrumentation & KPI Contracts (INSERTED)** - Add token/latency/cost/reliability KPI capture and definitions
-- [ ] **Phase 4: Nanobot Reference Integration** - Validate architecture with nanobot/OpenGUI adapter
-- [ ] **Phase 5: Framework Expansion & CLI Profiles** - Add OpenClaw/hermes scaffolds and framework-oriented commands
-- [ ] **Phase 6: Reporting, Conformance & Reproducibility** - Finalize cross-framework comparison and QA guarantees
+- [x] **Phase 3.1: Metrics Instrumentation & KPI Contracts (INSERTED)** - Add token/latency/cost/reliability KPI capture and definitions
+- [x] **Phase 4: Nanobot Reference Integration** - Validate architecture with nanobot/OpenGUI adapter (completed 2026-04-16)
+- [x] **Phase 5: Framework Expansion & CLI Profiles** - Add OpenClaw/hermes scaffolds and framework-oriented commands (completed 2026-04-17)
+- [x] **Phase 6: Reporting, Conformance & Reproducibility** - Finalize cross-framework comparison and QA guarantees (completed 2026-04-17)
 
 ## Phase Details
 
@@ -83,10 +83,10 @@ Plans:
 **Plans**: 4 plans
 
 Plans:
-- [ ] 03.1-01: Add canonical metrics event schema and telemetry hooks
-- [ ] 03.1-02: Add token/TTFT collection adapters with provider fallback policy
-- [ ] 03.1-03: Add latency/reliability aggregators and per-run KPI summaries
-- [ ] 03.1-04: Add KPI validation tests and metrics quality flagging
+- [x] 03.1-01: Add canonical metrics event schema and telemetry hooks
+- [x] 03.1-02: Add token/TTFT collection adapters with provider fallback policy
+- [x] 03.1-03: Add latency/reliability aggregators and per-run KPI summaries
+- [x] 03.1-04: Add KPI validation tests and metrics quality flagging
 
 ### Phase 4: Nanobot Reference Integration
 **Goal**: Prove adapter architecture end-to-end with nanobot/OpenGUI.
@@ -99,9 +99,9 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 04-01: Implement nanobot/OpenGUI adapter using protocol boundaries
-- [ ] 04-02: Add compatibility shim for existing built-in agent runner path
-- [ ] 04-03: Run side-by-side pilot benchmark and validate artifact parity
+- [x] 04-01: Implement nanobot/OpenGUI adapter using protocol boundaries
+- [x] 04-02: Add compatibility shim for existing built-in agent runner path
+- [x] 04-03: Run side-by-side pilot benchmark and validate artifact parity
 
 ### Phase 5: Framework Expansion & CLI Profiles
 **Goal**: Enable broader framework onboarding and practical operator workflows.
@@ -114,9 +114,9 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 05-01: Add OpenClaw/hermes adapter templates and docs
-- [ ] 05-02: Add framework-profile eval CLI commands and config loading
-- [ ] 05-03: Add framework inventory and conformance status reporting commands
+- [x] 05-01: Add OpenClaw/hermes adapter templates and docs
+- [x] 05-02: Add framework-profile eval CLI commands and config loading
+- [x] 05-03: Add framework inventory and conformance status reporting commands
 
 ### Phase 6: Reporting, Conformance & Reproducibility
 **Goal**: Finalize trustworthy cross-framework comparison outputs.
@@ -130,10 +130,10 @@ Plans:
 **Plans**: 4 plans
 
 Plans:
-- [ ] 06-01: Implement trace schema versioning and converter utilities
-- [ ] 06-02: Implement cross-framework aggregation and KPI-enriched leaderboard report output
-- [ ] 06-03: Build adapter conformance CLI and test suite (including metrics conformance)
-- [ ] 06-04: Add reproducibility/judge-agreement workflow and thresholds
+- [x] 06-01: Implement trace schema versioning and converter utilities
+- [x] 06-02: Implement cross-framework aggregation and KPI-enriched leaderboard report output
+- [x] 06-03: Build adapter conformance CLI and test suite (including metrics conformance)
+- [x] 06-04: Add reproducibility/judge-agreement workflow and thresholds
 
 ## Progress
 
@@ -145,7 +145,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 3.1 -> 4 -> 5 -> 6
 | 1. Protocol Baseline | 4/4 | Completed | 2026-04-17 |
 | 2. Tool Router & Capability Policy | 4/4 | Completed | 2026-04-17 |
 | 3. Evaluator Unification | 4/4 | Completed | 2026-04-17 |
-| 3.1. Metrics Instrumentation & KPI Contracts | 0/4 | Not started | - |
-| 4. Nanobot Reference Integration | 0/3 | Not started | - |
-| 5. Framework Expansion & CLI Profiles | 0/3 | Not started | - |
-| 6. Reporting, Conformance & Reproducibility | 0/4 | Not started | - |
+| 3.1. Metrics Instrumentation & KPI Contracts | 4/4 | Completed | 2026-04-17 |
+| 4. Nanobot Reference Integration | 3/3 | Complete    | 2026-04-16 |
+| 5. Framework Expansion & CLI Profiles | 3/3 | Completed | 2026-04-17 |
+| 6. Reporting, Conformance & Reproducibility | 4/4 | Completed | 2026-04-17 |
