@@ -6,7 +6,11 @@ from loguru import logger
 from PIL import Image, ImageDraw
 
 from mobile_world.runtime.protocol.events import CanonicalTrajectoryHeader
-from mobile_world.runtime.protocol.normalization import normalize_score_event, normalize_step_event
+from mobile_world.runtime.protocol.normalization import (
+    normalize_metrics_event,
+    normalize_score_event,
+    normalize_step_event,
+)
 from mobile_world.runtime.utils.models import Observation
 
 
@@ -76,6 +80,8 @@ CANONICAL_LOG_FILE_NAME = "traj.canonical.jsonl"
 CANONICAL_META_FILE_NAME = "traj.meta.json"
 SCORE_FILE_NAME = "result.txt"
 EVALUATOR_AUDIT_FILE_NAME = "evaluator_audit.json"
+METRICS_FILE_NAME = "metrics.json"
+RUN_METRICS_FILE_NAME = METRICS_FILE_NAME
 
 
 class TrajLogger:
@@ -86,6 +92,7 @@ class TrajLogger:
         self.canonical_meta_file_name = CANONICAL_META_FILE_NAME
         self.score_file_name = SCORE_FILE_NAME
         self.evaluator_audit_file_name = EVALUATOR_AUDIT_FILE_NAME
+        self.metrics_file_name = METRICS_FILE_NAME
         self.screenshots_dir = "screenshots"
         self.marked_screenshots_dir = "marked_screenshots"
         self.tools = None
@@ -110,6 +117,8 @@ class TrajLogger:
         with open(os.path.join(self.log_file_dir, self.canonical_meta_file_name), "w") as f:
             json.dump({}, f)
         with open(os.path.join(self.log_file_dir, self.evaluator_audit_file_name), "w") as f:
+            json.dump({}, f)
+        with open(os.path.join(self.log_file_dir, self.metrics_file_name), "w") as f:
             json.dump({}, f)
 
     def _canonical_paths(self) -> tuple[str, str]:
@@ -146,7 +155,14 @@ class TrajLogger:
             tools=self.tools or [],
             metadata={"legacy_traj_file": self.log_file_name},
         ).model_dump()
-        for key in ("tool_manifest", "policy_manifest", "token_usage", "evaluator_audit"):
+        for key in (
+            "tool_manifest",
+            "policy_manifest",
+            "token_usage",
+            "evaluator_audit",
+            "metrics_summary",
+            "adapter_artifacts",
+        ):
             if key in existing_meta:
                 header[key] = existing_meta[key]
         if token_usage is not None:
@@ -167,6 +183,7 @@ class TrajLogger:
             "canonical_meta_path": canonical_meta_path,
             "score_path": os.path.join(self.log_file_dir, self.score_file_name),
             "evaluator_audit_path": os.path.join(self.log_file_dir, self.evaluator_audit_file_name),
+            "metrics_path": os.path.join(self.log_file_dir, self.metrics_file_name),
         }
 
     def log_traj(
@@ -178,6 +195,7 @@ class TrajLogger:
         action: dict,
         obs: Observation,
         token_usage: dict[str, int] = None,
+        step_info: dict | None = None,
     ) -> None:
         task_id = "0"
 
@@ -195,6 +213,7 @@ class TrajLogger:
                 "action": action,
                 "ask_user_response": obs.ask_user_response,
                 "tool_call": obs.tool_call,
+                "step_info": step_info or {},
             }
         )
         log_data[task_id]["token_usage"] = token_usage
@@ -211,6 +230,7 @@ class TrajLogger:
             action=action,
             observation=obs,
             token_usage=token_usage,
+            info=step_info or {},
         )
         self._append_canonical_event(canonical_step.model_dump())
 
@@ -286,6 +306,36 @@ class TrajLogger:
             }
         )
 
+    def log_step_metrics(self, *, step: int, metrics: dict) -> None:
+        """Attach post-dispatch step metrics to legacy and canonical artifacts."""
+        task_id = "0"
+        legacy_path = os.path.join(self.log_file_dir, self.log_file_name)
+        legacy = self._read_json_or_default(legacy_path, default={})
+        traj = legacy.get(task_id, {}).get("traj", [])
+        for entry in reversed(traj):
+            if entry.get("step") == step:
+                existing = entry.get("step_info", {})
+                if not isinstance(existing, dict):
+                    existing = {}
+                existing.update(metrics)
+                entry["step_info"] = existing
+                break
+        with open(legacy_path, "w", encoding="utf-8") as f:
+            json.dump(legacy, f, ensure_ascii=False, indent=4)
+
+        self._append_canonical_event(
+            {
+                "type": "metrics_step",
+                "schema_version": "1.0.0",
+                "step": step,
+                "metrics": metrics,
+            }
+        )
+
+    def log_metrics_event(self, *, step: int, metrics: dict) -> None:
+        """Backward/plan-friendly alias for step-level metrics logging."""
+        self.log_step_metrics(step=step, metrics=metrics)
+
     def log_evaluator_audit(self, audit: dict) -> None:
         """Persist evaluator audit payload for run-level score traceability."""
         task_id = "0"
@@ -345,6 +395,68 @@ class TrajLogger:
         # reset tools after logging score
         self.tools = None
 
+    def log_metrics_summary(self, *, task_name: str, run_id: str, summary: dict) -> None:
+        """Persist run-level KPI summary with canonical metrics event."""
+        metrics_path = os.path.join(self.log_file_dir, self.metrics_file_name)
+        with open(metrics_path, "w", encoding="utf-8") as f:
+            json.dump(summary, f, ensure_ascii=False, indent=4)
+
+        task_id = "0"
+        legacy_path = os.path.join(self.log_file_dir, self.log_file_name)
+        legacy = self._read_json_or_default(legacy_path, default={})
+        if task_id not in legacy:
+            legacy[task_id] = {"tools": self.tools, "traj": []}
+        legacy[task_id]["metrics_summary"] = summary
+        with open(legacy_path, "w", encoding="utf-8") as f:
+            json.dump(legacy, f, ensure_ascii=False, indent=4)
+
+        _, meta_path = self._canonical_paths()
+        meta = self._read_json_or_default(meta_path, default={})
+        meta["metrics_summary"] = summary
+        with open(meta_path, "w", encoding="utf-8") as f:
+            json.dump(meta, f, ensure_ascii=False, indent=4)
+
+        event = normalize_metrics_event(
+            task_name=task_name,
+            run_id=run_id,
+            quality_flags=summary.get("quality_flags", {}),
+            token_usage=summary.get("token_usage", {}),
+            latency=summary.get("latency", {}),
+            reliability=summary.get("reliability", {}),
+            cost=summary.get("cost", {}),
+            info={"source": "traj_logger.log_metrics_summary"},
+        )
+        self._append_canonical_event(event.model_dump())
+
+    def log_run_kpi_summary(self, *, task_name: str, run_id: str, summary: dict) -> None:
+        """Backward/plan-friendly alias for run-level KPI summary logging."""
+        self.log_metrics_summary(task_name=task_name, run_id=run_id, summary=summary)
+
+    def log_adapter_artifacts(self, artifacts: list[dict]) -> None:
+        """Persist adapter-emitted artifacts into legacy and canonical outputs."""
+        task_id = "0"
+        legacy_path = os.path.join(self.log_file_dir, self.log_file_name)
+        legacy = self._read_json_or_default(legacy_path, default={})
+        if task_id not in legacy:
+            legacy[task_id] = {"tools": self.tools, "traj": []}
+        legacy[task_id]["adapter_artifacts"] = artifacts
+        with open(legacy_path, "w", encoding="utf-8") as f:
+            json.dump(legacy, f, ensure_ascii=False, indent=4)
+
+        _, meta_path = self._canonical_paths()
+        meta = self._read_json_or_default(meta_path, default={})
+        meta["adapter_artifacts"] = artifacts
+        with open(meta_path, "w", encoding="utf-8") as f:
+            json.dump(meta, f, ensure_ascii=False, indent=4)
+
+        self._append_canonical_event(
+            {
+                "type": "adapter_artifacts",
+                "schema_version": "1.0.0",
+                "artifacts": artifacts,
+            }
+        )
+
     def log_token_usage(self, token_usage: dict[str, int]) -> None:
         """Log token usage to traj.json."""
         with open(os.path.join(self.log_file_dir, self.log_file_name)) as f:
@@ -394,6 +506,10 @@ class TrajLogger:
                 self.log_file_dir, f"evaluator_audit_backup_{timestamp}.json"
             )
             os.rename(evaluator_audit_path, backup_eval_path)
+        metrics_path = os.path.join(self.log_file_dir, self.metrics_file_name)
+        if os.path.exists(metrics_path):
+            backup_metrics_path = os.path.join(self.log_file_dir, f"metrics_backup_{timestamp}.json")
+            os.rename(metrics_path, backup_metrics_path)
 
         # Recreate directories and empty traj.json
         os.makedirs(screenshots_path, exist_ok=True)
@@ -405,6 +521,8 @@ class TrajLogger:
         with open(meta_path, "w", encoding="utf-8") as f:
             json.dump({}, f)
         with open(evaluator_audit_path, "w", encoding="utf-8") as f:
+            json.dump({}, f)
+        with open(metrics_path, "w", encoding="utf-8") as f:
             json.dump({}, f)
 
         self.tools = None

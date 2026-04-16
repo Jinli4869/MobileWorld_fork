@@ -10,6 +10,7 @@ from mobile_world.runtime.utils.trajectory_logger import (
     CANONICAL_LOG_FILE_NAME,
     CANONICAL_META_FILE_NAME,
     LOG_FILE_NAME,
+    METRICS_FILE_NAME,
     SCORE_FILE_NAME,
     TrajLogger,
 )
@@ -59,11 +60,13 @@ def test_trajectory_logger_writes_legacy_and_canonical_artifacts(tmp_path: Path)
     canonical_jsonl_path = task_dir / CANONICAL_LOG_FILE_NAME
     canonical_meta_path = task_dir / CANONICAL_META_FILE_NAME
     score_path = task_dir / SCORE_FILE_NAME
+    metrics_path = task_dir / METRICS_FILE_NAME
 
     assert legacy_path.exists()
     assert canonical_jsonl_path.exists()
     assert canonical_meta_path.exists()
     assert score_path.exists()
+    assert metrics_path.exists()
 
     legacy_obj = json.loads(legacy_path.read_text(encoding="utf-8"))
     assert "0" in legacy_obj

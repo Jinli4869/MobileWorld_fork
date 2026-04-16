@@ -69,3 +69,19 @@ class CanonicalScoreEvent(BaseModel):
     reason: str
     evaluator: str | None = None
     evidence_refs: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class CanonicalMetricsEvent(BaseModel):
+    """Canonical run-level metrics summary event."""
+
+    type: Literal["metrics"] = "metrics"
+    schema_version: str = CANONICAL_TRAJECTORY_SCHEMA_VERSION
+    timestamp: str = Field(default_factory=utc_now_iso)
+    task_name: str
+    run_id: str
+    quality_flags: MetricsQualityFlags = Field(default_factory=MetricsQualityFlags)
+    token_usage: dict[str, Any] = Field(default_factory=dict)
+    latency: dict[str, Any] = Field(default_factory=dict)
+    reliability: dict[str, Any] = Field(default_factory=dict)
+    cost: dict[str, Any] = Field(default_factory=dict)
+    info: dict[str, Any] = Field(default_factory=dict)

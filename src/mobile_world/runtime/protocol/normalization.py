@@ -5,7 +5,12 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from mobile_world.runtime.protocol.events import CanonicalScoreEvent, CanonicalStepEvent
+from mobile_world.runtime.protocol.events import (
+    CanonicalMetricsEvent,
+    CanonicalScoreEvent,
+    CanonicalStepEvent,
+    MetricsQualityFlags,
+)
 
 
 def _ensure_json_serializable(value: Any) -> Any:
@@ -92,4 +97,32 @@ def normalize_score_event(
         reason=str(reason),
         evaluator=evaluator,
         evidence_refs=normalized_refs,
+    )
+
+
+def normalize_metrics_event(
+    *,
+    task_name: str,
+    run_id: str,
+    quality_flags: dict[str, str] | MetricsQualityFlags,
+    token_usage: dict[str, Any],
+    latency: dict[str, Any],
+    reliability: dict[str, Any],
+    cost: dict[str, Any] | None = None,
+    info: dict[str, Any] | None = None,
+) -> CanonicalMetricsEvent:
+    """Create canonical metrics summary event."""
+    if isinstance(quality_flags, dict):
+        quality = MetricsQualityFlags(**quality_flags)
+    else:
+        quality = quality_flags
+    return CanonicalMetricsEvent(
+        task_name=task_name,
+        run_id=run_id,
+        quality_flags=quality,
+        token_usage=_ensure_json_serializable(token_usage),
+        latency=_ensure_json_serializable(latency),
+        reliability=_ensure_json_serializable(reliability),
+        cost=_ensure_json_serializable(cost or {}),
+        info=_ensure_json_serializable(info or {}),
     )
