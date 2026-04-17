@@ -96,6 +96,7 @@ class TrajLogger:
         self.screenshots_dir = "screenshots"
         self.marked_screenshots_dir = "marked_screenshots"
         self.tools = None
+        self._canonical_header_emitted = False
 
         if os.path.exists(self.log_file_dir) and os.path.exists(
             os.path.join(self.log_file_dir, self.screenshots_dir)
@@ -175,6 +176,60 @@ class TrajLogger:
         with open(canonical_path, "a", encoding="utf-8") as f:
             f.write(json.dumps(event, ensure_ascii=False) + "\n")
 
+    def _canonical_header_written(self) -> bool:
+        if self._canonical_header_emitted:
+            return True
+
+        canonical_path, _ = self._canonical_paths()
+        if not os.path.exists(canonical_path):
+            return False
+
+        with open(canonical_path, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    payload = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(payload, dict) and payload.get("type") == "header":
+                    self._canonical_header_emitted = True
+                    return True
+        return False
+
+    def _infer_task_goal_for_header(self) -> str:
+        _, meta_path = self._canonical_paths()
+        meta = self._read_json_or_default(meta_path, default={})
+        task_goal = meta.get("task_goal")
+        if isinstance(task_goal, str):
+            return task_goal
+
+        legacy_path = os.path.join(self.log_file_dir, self.log_file_name)
+        legacy = self._read_json_or_default(legacy_path, default={})
+        traj = legacy.get("0", {}).get("traj", [])
+        if isinstance(traj, list):
+            for entry in traj:
+                if isinstance(entry, dict):
+                    goal = entry.get("task_goal")
+                    if isinstance(goal, str):
+                        return goal
+        return ""
+
+    def _ensure_canonical_header_event(self, *, task_name: str, task_goal: str, run_id: str) -> None:
+        if self._canonical_header_written():
+            return
+
+        header_event = CanonicalTrajectoryHeader(
+            task_name=task_name,
+            task_goal=task_goal,
+            run_id=run_id,
+            tools=self.tools or [],
+            metadata={"legacy_traj_file": self.log_file_name},
+        ).model_dump()
+        self._append_canonical_event(header_event)
+        self._canonical_header_emitted = True
+
     def artifact_paths(self) -> dict[str, str]:
         canonical_log_path, canonical_meta_path = self._canonical_paths()
         return {
@@ -198,6 +253,7 @@ class TrajLogger:
         step_info: dict | None = None,
     ) -> None:
         task_id = "0"
+        run_id = f"{task_name}-{task_id}"
 
         with open(os.path.join(self.log_file_dir, self.log_file_name)) as f:
             log_data = json.load(f)
@@ -221,10 +277,11 @@ class TrajLogger:
         with open(os.path.join(self.log_file_dir, self.log_file_name), "w") as f:
             json.dump(log_data, f, ensure_ascii=False, indent=4)
         self._write_canonical_meta(task_name, task_goal, task_id, token_usage=token_usage)
+        self._ensure_canonical_header_event(task_name=task_name, task_goal=task_goal, run_id=run_id)
         canonical_step = normalize_step_event(
             task_name=task_name,
             task_goal=task_goal,
-            run_id=f"{task_name}-{task_id}",
+            run_id=run_id,
             step=step,
             prediction=prediction,
             action=action,
@@ -382,9 +439,16 @@ class TrajLogger:
                     "\nevidence_refs: "
                     + json.dumps(evidence_refs, ensure_ascii=False, separators=(",", ":"))
                 )
+        task_name = os.path.basename(self.log_file_dir)
+        run_id = f"{task_name}-0"
+        self._ensure_canonical_header_event(
+            task_name=task_name,
+            task_goal=self._infer_task_goal_for_header(),
+            run_id=run_id,
+        )
         score_event = normalize_score_event(
-            task_name=os.path.basename(self.log_file_dir),
-            run_id=f"{os.path.basename(self.log_file_dir)}-0",
+            task_name=task_name,
+            run_id=run_id,
             score=score,
             reason=reason,
             evaluator=evaluator_name,
@@ -416,6 +480,11 @@ class TrajLogger:
         with open(meta_path, "w", encoding="utf-8") as f:
             json.dump(meta, f, ensure_ascii=False, indent=4)
 
+        self._ensure_canonical_header_event(
+            task_name=task_name,
+            task_goal=self._infer_task_goal_for_header(),
+            run_id=run_id,
+        )
         event = normalize_metrics_event(
             task_name=task_name,
             run_id=run_id,
