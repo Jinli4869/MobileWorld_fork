@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: verifying
-stopped_at: Completed 07-03-PLAN.md
-last_updated: "2026-04-17T07:38:43.288Z"
+status: planned
+stopped_at: Planned Phase 08 (3 plans)
+last_updated: "2026-04-17T08:15:47.000Z"
 last_activity: 2026-04-17
 progress:
   total_phases: 10
   completed_phases: 8
-  total_plans: 29
+  total_plans: 35
   completed_plans: 29
-  percent: 100
+  percent: 83
 ---
 
 # Project State
@@ -21,22 +21,22 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-16)
 
 **Core value:** One benchmark, one task standard, one evaluator contract, multiple agent frameworks with reproducible and comparable results.
-**Current focus:** Phase 07 — conformance-artifact-contract-closure
+**Current focus:** Phase 08 — framework-profile-policy-flow-repair
 
 ## Current Position
 
-Phase: 07 (conformance-artifact-contract-closure) — EXECUTING
-Plan: 3 of 3
-Status: Phase complete — ready for verification
+Phase: 08 (framework-profile-policy-flow-repair) — PLANNED
+Plan: 0 of 3
+Status: Ready to execute
 Last activity: 2026-04-17
 
-Progress: [██████████] 100%
+Progress: [████████░░] 83%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 26
+- Total plans completed: 29
 - Average duration: 0.5 hours/plan
 - Total execution time: 8.0 hours
 
@@ -54,7 +54,7 @@ Progress: [██████████] 100%
 
 **Recent Trend:**
 
-- Last 5 plans: 03-04, 03.1-01, 03.1-02, 03.1-03, 03.1-04
+- Last 5 plans: 06-03, 06-04, 07-01, 07-02, 07-03
 - Trend: Positive
 
 *Updated after each plan completion*
@@ -79,6 +79,8 @@ Recent decisions affecting current work:
 - [Phase 07]: Use one capability_manifest from CapabilityDecision.as_manifest() for tool and policy artifact writes.
 - [Phase 07]: Use runtime task execution via _execute_single_task and TrajLogger, not synthetic-only fixtures, for conformance assertions.
 - [Phase 07]: Assert exact failing check names for header and policy-manifest absence to lock deterministic blocker behavior.
+- [Phase 08 Planning]: Use `effective_policy_profile = framework_profile or agent_type` as the single runner policy identity source.
+- [Phase 08 Planning]: Add dedicated phase protocol regressions for resolver input identity and policy-manifest profile alignment.
 
 ### Pending Todos
 
@@ -96,6 +98,6 @@ None currently.
 
 ## Session Continuity
 
-Last session: 2026-04-17T07:38:43.285Z
-Stopped at: Completed 07-03-PLAN.md
+Last session: 2026-04-17T08:15:47.000Z
+Stopped at: Planned Phase 08 (3 plans)
 Resume file: None
