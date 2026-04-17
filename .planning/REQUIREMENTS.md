@@ -38,7 +38,7 @@
 
 ### Trajectory & Artifacts
 
-- [ ] **TRCE-01**: All runs persist a canonical versioned trajectory schema regardless of framework source.
+- [x] **TRCE-01**: All runs persist a canonical versioned trajectory schema regardless of framework source.
 - [x] **TRCE-02**: Historical trajectory formats can be converted or wrapped into the canonical schema.
 - [x] **TRCE-03**: Aggregated reports can compare multiple frameworks on identical task subsets and settings.
 
@@ -80,7 +80,7 @@
 | ADPT-02 | Phase 1 | Completed |
 | ADPT-03 | Phase 1 | Completed |
 | ADPT-04 | Phase 1 | Completed |
-| TRCE-01 | Phase 7 | Pending |
+| TRCE-01 | Phase 7 | Complete |
 | TOOL-01 | Phase 2 | Completed |
 | TOOL-02 | Phase 8 | Pending |
 | TOOL-03 | Phase 2 | Completed |

@@ -151,7 +151,7 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 07-01: Emit canonical header event in runtime trajectory output
+- [x] 07-01: Emit canonical header event in runtime trajectory output
 - [ ] 07-02: Persist policy manifest metadata for conformance checks
 - [ ] 07-03: Add conformance regression verifying eval-to-conformance compatibility
 
