@@ -318,6 +318,12 @@ def test_reproducibility_reports_variance_and_judge_agreement(tmp_path: Path):
     assert report["common_tasks"] == ["task_delta"]
     assert report["stability_metrics"]["variance_passed"] is True
     assert report["evaluation_quality"]["judge_agreement_rate"] == 0.666667
+    assert report["evaluation_quality"]["agreement_available"] is True
+    assert report["evaluation_quality"]["agreement_status"] == "passed"
+    assert report["evaluation_quality"]["agreement_passed"] is True
+    assert report["gate_summary"]["stability_gate"]["status"] == "passed"
+    assert report["gate_summary"]["agreement_gate"]["status"] == "passed"
+    assert report["gate_summary"]["overall_status"] == "passed"
     assert report["ok"] is True
 
 
