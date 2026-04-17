@@ -52,7 +52,7 @@
 ### Compatibility & QA
 
 - [x] **COMP-01**: Existing built-in agent eval/test workflows remain functional without adapter migration.
-- [ ] **COMP-02**: Conformance test suite validates adapter contract, tool routing, and evaluator output shape.
+- [x] **COMP-02**: Conformance test suite validates adapter contract, tool routing, and evaluator output shape.
 - [ ] **COMP-03**: Regression tests ensure benchmark reproducibility between repeated runs under same config.
 
 ## v2 Requirements
@@ -103,7 +103,7 @@
 | METR-07 | Phase 9 | Pending |
 | TRCE-02 | Phase 6 | Complete |
 | TRCE-03 | Phase 6 | Complete |
-| COMP-02 | Phase 7 | Pending |
+| COMP-02 | Phase 7 | Complete |
 | COMP-03 | Phase 9 | Pending |
 
 **Coverage:**

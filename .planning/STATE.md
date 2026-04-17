@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 07-01-PLAN.md
-last_updated: "2026-04-17T07:14:20.770Z"
+stopped_at: Completed 07-02-PLAN.md
+last_updated: "2026-04-17T07:28:37.740Z"
 last_activity: 2026-04-17
 progress:
   total_phases: 10
   completed_phases: 7
   total_plans: 29
-  completed_plans: 27
-  percent: 93
+  completed_plans: 28
+  percent: 97
 ---
 
 # Project State
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-04-16)
 ## Current Position
 
 Phase: 07 (conformance-artifact-contract-closure) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 Last activity: 2026-04-17
 
@@ -59,6 +59,7 @@ Progress: [██████████] 100%
 
 *Updated after each plan completion*
 | Phase 07 P01 | 1 min | 2 tasks | 2 files |
+| Phase 07 P02 | 2 min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -73,6 +74,8 @@ Recent decisions affecting current work:
 - [Phase 3.1]: KPI quality flags are explicit (`native`, `estimated`, `unavailable`) and serialized with run metrics
 - [Phase 07]: Emit canonical header via CanonicalTrajectoryHeader in runtime JSONL writer paths (traj/score/metrics).
 - [Phase 07]: Enforce header uniqueness in regression tests using explicit header_events count assertions.
+- [Phase 07]: Persist policy_manifest in both legacy and canonical trajectory metadata for conformance checks.
+- [Phase 07]: Use one capability_manifest from CapabilityDecision.as_manifest() for tool and policy artifact writes.
 
 ### Pending Todos
 
@@ -90,6 +93,6 @@ None currently.
 
 ## Session Continuity
 
-Last session: 2026-04-17T07:14:20.767Z
-Stopped at: Completed 07-01-PLAN.md
+Last session: 2026-04-17T07:28:37.737Z
+Stopped at: Completed 07-02-PLAN.md
 Resume file: None

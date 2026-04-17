@@ -152,7 +152,7 @@ Plans:
 
 Plans:
 - [x] 07-01: Emit canonical header event in runtime trajectory output
-- [ ] 07-02: Persist policy manifest metadata for conformance checks
+- [x] 07-02: Persist policy manifest metadata for conformance checks
 - [ ] 07-03: Add conformance regression verifying eval-to-conformance compatibility
 
 ### Phase 8: Framework Profile Policy Flow Repair
