@@ -16,6 +16,7 @@ One benchmark, one task standard, one evaluator contract, multiple agent framewo
 - ✓ MobileWorld supports GUI-only, MCP-augmented, and agent-user-interaction task slices via task tags and eval flags — existing
 - ✓ MobileWorld already supports multiple built-in agent implementations and allows loading custom agent classes from external `.py` files — existing
 - ✓ MobileWorld already captures trajectory logs and per-task scores for benchmark reporting — existing
+- ✓ Framework-profile eval flow now uses profile-bound capability policy semantics with deterministic artifact alignment (`policy_manifest.profile_name`) — validated in Phase 8
 
 ### Active
 
@@ -24,7 +25,6 @@ One benchmark, one task standard, one evaluator contract, multiple agent framewo
 - [ ] Introduce evaluator contracts that support both rule-based task evaluators and LLM-judge style evaluators (trajectory + screenshot judging).
 - [ ] Unify trajectory schema so outputs from built-in agents and external frameworks can be judged and compared consistently.
 - [ ] Add first-party adapter reference implementation using nanobot/OpenGUI integration patterns.
-- [ ] Add CLI/API workflows for framework registration, running eval by framework profile, and cross-framework leaderboard export.
 - [ ] Add a standardized benchmark KPI system (tokens, TTFT/TTFA/TTS, latency percentiles, tool reliability, cost efficiency, reproducibility, judge agreement) with consistent cross-framework definitions.
 
 ### Out of Scope
@@ -72,6 +72,11 @@ The current benchmark outputs are still score-centric. For production-quality fr
 
 This document evolves at phase transitions and milestone boundaries.
 
+## Current State
+
+- Phase 8 complete: framework-profile capability policy flow repaired and regression-protected.
+- Next focus: Phase 9 (reproducibility agreement gate hardening).
+
 **After each phase transition** (via `$gsd-transition`):
 1. Requirements invalidated? -> Move to Out of Scope with reason
 2. Requirements validated? -> Move to Validated with phase reference
@@ -86,4 +91,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-16 after initialization*
+*Last updated: 2026-04-17 after Phase 8 completion*
