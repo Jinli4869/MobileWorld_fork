@@ -40,6 +40,13 @@ def _to_float(value: Any) -> float | None:
         return None
 
 
+def _to_int(value: Any) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
 def _mean(values: list[float]) -> float | None:
     if not values:
         return None
@@ -61,6 +68,16 @@ def _judge_agreement_passed(audit: dict[str, Any]) -> bool | None:
     return None
 
 
+def _load_run_manifest(root: Path) -> dict[str, Any]:
+    manifest_path = root / "run_manifest.json"
+    if not manifest_path.exists():
+        return {}
+    try:
+        return _read_json(manifest_path)
+    except Exception:
+        return {}
+
+
 @dataclass
 class TaskRunRecord:
     task_name: str
@@ -68,6 +85,17 @@ class TaskRunRecord:
     metrics: dict[str, Any]
     evaluator_audit: dict[str, Any]
     root_dir: str
+    mixed_summary: dict[str, Any] | None = None
+
+
+@dataclass
+class FrameworkRunBundle:
+    framework: str
+    run_root: str
+    records: dict[str, TaskRunRecord]
+    run_manifest: dict[str, Any]
+    evaluation_mode: str
+    allow_adb_bypass: bool
 
 
 def load_task_run_records(run_root: str) -> dict[str, TaskRunRecord]:
@@ -84,16 +112,45 @@ def load_task_run_records(run_root: str) -> dict[str, TaskRunRecord]:
 
         metrics_path = task_dir / METRICS_FILE_NAME
         audit_path = task_dir / EVALUATOR_AUDIT_FILE_NAME
+        mixed_summary_path = task_dir / "nanobot_mixed_summary.json"
+
         metrics = _read_json(metrics_path) if metrics_path.exists() else {}
         audit = _read_json(audit_path) if audit_path.exists() else {}
+        mixed_summary = _read_json(mixed_summary_path) if mixed_summary_path.exists() else None
+
         records[task_dir.name] = TaskRunRecord(
             task_name=task_dir.name,
             score=_parse_score(score_path),
             metrics=metrics,
             evaluator_audit=audit,
             root_dir=str(task_dir),
+            mixed_summary=mixed_summary,
         )
     return records
+
+
+def _resolve_evaluation_mode(*, manifest: dict[str, Any], records: dict[str, TaskRunRecord]) -> str:
+    mode = manifest.get("evaluation_mode") if isinstance(manifest, dict) else None
+    if isinstance(mode, str):
+        normalized = mode.strip().lower()
+        if normalized in {"standard", "mixed"}:
+            return normalized
+
+    has_mixed_summary = any(record.mixed_summary is not None for record in records.values())
+    return "mixed" if has_mixed_summary else "standard"
+
+
+def _resolve_allow_adb_bypass(*, manifest: dict[str, Any], evaluation_mode: str) -> bool:
+    value = manifest.get("allow_adb_bypass") if isinstance(manifest, dict) else None
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"1", "true", "yes", "on"}:
+            return True
+        if normalized in {"0", "false", "no", "off"}:
+            return False
+    return evaluation_mode == "mixed"
 
 
 def _framework_summary(
@@ -118,6 +175,7 @@ def _framework_summary(
         record = records.get(task_name)
         if record is None:
             continue
+
         score = float(record.score)
         scores.append(score)
         is_success = score >= success_threshold
@@ -178,6 +236,35 @@ def _framework_summary(
     }
 
 
+def _mixed_lane_metrics(*, records: dict[str, TaskRunRecord], task_names: list[str]) -> dict[str, Any]:
+    adb_calls = 0
+    gui_task_calls = 0
+    deeplink_calls = 0
+    gui_steps = 0
+
+    for task_name in task_names:
+        record = records.get(task_name)
+        summary = record.mixed_summary if record else None
+        if not isinstance(summary, dict):
+            continue
+        adb_calls += _to_int(summary.get("adb_calls"))
+        gui_task_calls += _to_int(summary.get("gui_task_calls"))
+        deeplink_calls += _to_int(summary.get("deeplink_calls"))
+        gui_steps += _to_int(summary.get("gui_steps"))
+
+    tasks_compared = len(task_names)
+    return {
+        "adb_calls": adb_calls,
+        "gui_task_calls": gui_task_calls,
+        "deeplink_calls": deeplink_calls,
+        "gui_steps": gui_steps,
+        "avg_adb_calls_per_task": round(adb_calls / tasks_compared, 6) if tasks_compared else 0.0,
+        "avg_gui_task_calls_per_task": round(gui_task_calls / tasks_compared, 6) if tasks_compared else 0.0,
+        "avg_deeplink_calls_per_task": round(deeplink_calls / tasks_compared, 6) if tasks_compared else 0.0,
+        "avg_gui_steps_per_task": round(gui_steps / tasks_compared, 6) if tasks_compared else 0.0,
+    }
+
+
 def aggregate_framework_runs(
     *,
     framework_runs: dict[str, str],
@@ -187,13 +274,25 @@ def aggregate_framework_runs(
     if not framework_runs:
         raise ValueError("At least one framework run root is required")
 
-    loaded = {
-        framework: load_task_run_records(run_root)
-        for framework, run_root in framework_runs.items()
-    }
-    framework_names = sorted(loaded.keys())
+    bundles: dict[str, FrameworkRunBundle] = {}
+    for framework, run_root in framework_runs.items():
+        root = Path(run_root).expanduser()
+        records = load_task_run_records(str(root))
+        manifest = _load_run_manifest(root)
+        mode = _resolve_evaluation_mode(manifest=manifest, records=records)
+        allow_bypass = _resolve_allow_adb_bypass(manifest=manifest, evaluation_mode=mode)
+        bundles[framework] = FrameworkRunBundle(
+            framework=framework,
+            run_root=str(root),
+            records=records,
+            run_manifest=manifest,
+            evaluation_mode=mode,
+            allow_adb_bypass=allow_bypass,
+        )
 
-    task_sets = [set(records.keys()) for records in loaded.values()]
+    framework_names = sorted(bundles.keys())
+
+    task_sets = [set(bundle.records.keys()) for bundle in bundles.values()]
     if not task_sets:
         common_tasks: list[str] = []
     elif len(task_sets) == 1:
@@ -201,22 +300,37 @@ def aggregate_framework_runs(
     else:
         common_tasks = sorted(set.intersection(*task_sets))
 
-    summaries = [
-        _framework_summary(
+    summaries: list[dict[str, Any]] = []
+    for framework in framework_names:
+        bundle = bundles[framework]
+        summary = _framework_summary(
             framework=framework,
-            records=loaded[framework],
+            records=bundle.records,
             task_names=common_tasks,
             success_threshold=success_threshold,
         )
-        for framework in framework_names
-    ]
+        summary["evaluation_mode"] = bundle.evaluation_mode
+        summary["allow_adb_bypass"] = bundle.allow_adb_bypass
+        if bundle.evaluation_mode == "mixed":
+            summary["lane_metrics"] = _mixed_lane_metrics(
+                records=bundle.records,
+                task_names=common_tasks,
+            )
+        summaries.append(summary)
 
-    leaderboard = sorted(
-        summaries,
-        key=lambda row: (
-            row["success_rate"],
-            row["avg_score"] if row["avg_score"] is not None else -1.0,
-        ),
+    def _sort_key(row: dict[str, Any]) -> tuple[float, float]:
+        success = float(row.get("success_rate") or 0.0)
+        avg_score = row.get("avg_score")
+        return success, float(avg_score) if avg_score is not None else -1.0
+
+    standard_leaderboard = sorted(
+        [row for row in summaries if row.get("evaluation_mode") == "standard"],
+        key=_sort_key,
+        reverse=True,
+    )
+    mixed_leaderboard = sorted(
+        [row for row in summaries if row.get("evaluation_mode") == "mixed"],
+        key=_sort_key,
         reverse=True,
     )
 
@@ -224,7 +338,7 @@ def aggregate_framework_runs(
     for task_name in common_tasks:
         row: dict[str, Any] = {"task_name": task_name}
         for framework in framework_names:
-            record = loaded[framework].get(task_name)
+            record = bundles[framework].records.get(task_name)
             row[f"{framework}_score"] = record.score if record else None
         task_matrix.append(row)
 
@@ -257,15 +371,36 @@ def aggregate_framework_runs(
         for row in summaries
     ]
 
+    leaderboards = {
+        "standard": standard_leaderboard,
+        "mixed": mixed_leaderboard,
+    }
+
+    # Backward compatibility for existing consumers.
+    legacy_leaderboard = standard_leaderboard if standard_leaderboard else mixed_leaderboard
+
+    framework_modes = {
+        name: {
+            "evaluation_mode": bundles[name].evaluation_mode,
+            "allow_adb_bypass": bundles[name].allow_adb_bypass,
+        }
+        for name in framework_names
+    }
+
     return {
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
         "generated_at": datetime.now(UTC).isoformat(),
         "config": {
             "success_threshold": success_threshold,
         },
         "common_tasks": common_tasks,
         "frameworks": framework_names,
-        "leaderboard": leaderboard,
+        "framework_modes": framework_modes,
+        "leaderboards": leaderboards,
+        "leaderboard": legacy_leaderboard,
+        "comparability_notes": [
+            "mixed leaderboard allows ADB/deeplink/gui_task bypass lanes and must not be rank-merged directly with standard leaderboard."
+        ],
         "kpi_panels": {
             "efficiency": efficiency_panel,
             "latency": latency_panel,

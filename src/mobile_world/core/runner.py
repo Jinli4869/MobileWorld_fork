@@ -304,6 +304,10 @@ def _process_task_on_env(
     judge_api_base: str | None = None,
     framework_profile: str | None = None,
     nanobot_fork_path: str | None = None,
+    nanobot_config_path: str | None = None,
+    gui_claw_path: str | None = None,
+    evaluation_mode: str | None = None,
+    allow_adb_bypass: bool | None = None,
     **kwargs,
 ) -> dict:
     """Process a single task on a specific environment.
@@ -407,10 +411,18 @@ def _process_task_on_env(
                     api_key=api_key,
                     env=env,
                     nanobot_fork_path=nanobot_fork_path,
+                    nanobot_config_path=nanobot_config_path,
+                    gui_claw_path=gui_claw_path,
+                    evaluation_mode=evaluation_mode,
+                    allow_adb_bypass=allow_adb_bypass,
                     **kwargs,
                 )
                 framework_options = {
                     "nanobot_fork_path": nanobot_fork_path,
+                    "nanobot_config_path": nanobot_config_path,
+                    "gui_claw_path": gui_claw_path,
+                    "evaluation_mode": evaluation_mode,
+                    "allow_adb_bypass": allow_adb_bypass,
                 }
             else:
                 agent = create_agent(agent_type, model_name, llm_base_url, api_key, env=env, **kwargs)
@@ -506,6 +518,10 @@ def run_agent_with_evaluation(
     judge_api_base: str | None = None,
     framework_profile: str | None = None,
     nanobot_fork_path: str | None = None,
+    nanobot_config_path: str | None = None,
+    gui_claw_path: str | None = None,
+    evaluation_mode: str | None = None,
+    allow_adb_bypass: bool | None = None,
     **kwargs,
 ) -> list[dict]:
     """Run the agent and return the evaluation results.
@@ -616,6 +632,10 @@ def run_agent_with_evaluation(
                     judge_api_base=judge_api_base,
                     framework_profile=framework_profile,
                     nanobot_fork_path=nanobot_fork_path,
+                    nanobot_config_path=nanobot_config_path,
+                    gui_claw_path=gui_claw_path,
+                    evaluation_mode=evaluation_mode,
+                    allow_adb_bypass=allow_adb_bypass,
                     **kwargs,
                 )
                 for task_name in pending_tasks

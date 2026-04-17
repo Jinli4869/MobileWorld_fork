@@ -1,4 +1,4 @@
-"""Phase 4 nanobot reference integration protocol tests."""
+"""Phase 4 nanobot mixed integration protocol tests."""
 
 import json
 from pathlib import Path
@@ -41,6 +41,10 @@ def _read_jsonl(path: Path) -> list[dict]:
             continue
         rows.append(json.loads(line))
     return rows
+
+
+def _write_nanobot_config(path: Path) -> None:
+    path.write_text(json.dumps({"gui": {"backend": "adb"}}, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 class DummyEnv:
@@ -108,32 +112,173 @@ class ScriptedAdapter(FrameworkAdapter):
         )
 
 
-def test_create_framework_adapter_nanobot_profile():
+def test_create_framework_adapter_nanobot_profile(tmp_path: Path):
+    nanobot_fork = tmp_path / "nanobot_fork"
+    nanobot_fork.mkdir(parents=True)
+    nanobot_config = tmp_path / "nanobot-config.json"
+    _write_nanobot_config(nanobot_config)
+
     adapter = create_framework_adapter(
         "nanobot_opengui",
         model_name="test-model",
         llm_base_url="http://localhost:8080/v1",
+        nanobot_fork_path=str(nanobot_fork),
+        nanobot_config_path=str(nanobot_config),
+        gui_claw_path=str(tmp_path),
+        evaluation_mode="mixed",
+        allow_adb_bypass=True,
     )
     assert isinstance(adapter, NanobotOpenGUIAdapter)
+
     init = adapter.initialize(
         AdapterInitializeInput(
             task_name="task_phase4",
             task_goal="finish task",
             run_id="task_phase4-0",
-            options={},
+            options={
+                "nanobot_config_path": str(nanobot_config),
+                "gui_claw_path": str(tmp_path),
+                "evaluation_mode": "mixed",
+                "allow_adb_bypass": True,
+            },
         )
     )
     assert init.ok is True
+
     step = adapter.step(
         AdapterStepInput(
             run_id="task_phase4-0",
             task_name="task_phase4",
             step_index=1,
-            observation={"nanobot_done": True},
+            observation={
+                "nanobot_mixed_result": {
+                    "summary": "injected nanobot mixed run",
+                    "success": True,
+                    "adb_calls": 2,
+                    "gui_task_calls": 1,
+                    "deeplink_calls": 0,
+                    "gui_steps": 5,
+                    "trace_refs": ["/tmp/trace.jsonl"],
+                }
+            },
         )
     )
-    assert step.action["action_type"] == "wait"
+    assert step.action["action_type"] == "finished"
     assert step.done is True
+
+
+def test_nanobot_adapter_initialize_fails_when_config_path_missing(tmp_path: Path):
+    nanobot_fork = tmp_path / "nanobot_fork"
+    nanobot_fork.mkdir(parents=True)
+
+    adapter = NanobotOpenGUIAdapter(nanobot_fork_path=str(nanobot_fork))
+    result = adapter.initialize(
+        AdapterInitializeInput(
+            task_name="task_phase4",
+            task_goal="goal",
+            run_id="task_phase4-0",
+            options={"evaluation_mode": "mixed", "allow_adb_bypass": True},
+        )
+    )
+
+    assert result.ok is False
+    assert result.message == "nanobot_config_path_required"
+
+
+def test_nanobot_adapter_initialize_fails_when_config_path_invalid(tmp_path: Path):
+    nanobot_fork = tmp_path / "nanobot_fork"
+    nanobot_fork.mkdir(parents=True)
+
+    adapter = NanobotOpenGUIAdapter(nanobot_fork_path=str(nanobot_fork))
+    missing_config = tmp_path / "missing-nanobot-config.json"
+    result = adapter.initialize(
+        AdapterInitializeInput(
+            task_name="task_phase4",
+            task_goal="goal",
+            run_id="task_phase4-0",
+            options={
+                "nanobot_config_path": str(missing_config),
+                "evaluation_mode": "mixed",
+                "allow_adb_bypass": True,
+            },
+        )
+    )
+
+    assert result.ok is False
+    assert result.message.startswith("nanobot_config_path_not_found:")
+
+
+def test_nanobot_adapter_finalize_emits_mixed_summary_artifact(tmp_path: Path):
+    nanobot_fork = tmp_path / "nanobot_fork"
+    nanobot_fork.mkdir(parents=True)
+    nanobot_config = tmp_path / "nanobot-config.json"
+    _write_nanobot_config(nanobot_config)
+
+    adapter = NanobotOpenGUIAdapter(
+        nanobot_fork_path=str(nanobot_fork),
+        nanobot_config_path=str(nanobot_config),
+        gui_claw_path=str(tmp_path),
+        evaluation_mode="mixed",
+        allow_adb_bypass=True,
+    )
+
+    init = adapter.initialize(
+        AdapterInitializeInput(
+            task_name="task_phase4",
+            task_goal="goal",
+            run_id="task_phase4-0",
+            options={
+                "output_dir": str(tmp_path),
+                "nanobot_config_path": str(nanobot_config),
+                "evaluation_mode": "mixed",
+                "allow_adb_bypass": True,
+            },
+        )
+    )
+    assert init.ok is True
+
+    _ = adapter.step(
+        AdapterStepInput(
+            run_id="task_phase4-0",
+            task_name="task_phase4",
+            step_index=1,
+            observation={
+                "nanobot_mixed_result": {
+                    "summary": "done",
+                    "success": True,
+                    "adb_calls": 3,
+                    "gui_task_calls": 1,
+                    "deeplink_calls": 1,
+                    "gui_steps": 7,
+                    "trace_refs": [str(tmp_path / "trace.jsonl")],
+                }
+            },
+        )
+    )
+
+    finalize = adapter.finalize(
+        AdapterFinalizeInput(
+            run_id="task_phase4-0",
+            task_name="task_phase4",
+            score=1.0,
+            reason="ok",
+            metrics={"reliability": {"total_steps": 1}},
+        )
+    )
+    assert finalize.ok is True
+
+    artifacts = adapter.emit_artifacts(run_id="task_phase4-0", output_dir=str(tmp_path))
+    artifact_types = [item.artifact_type for item in artifacts.artifacts]
+    assert "nanobot_mixed_summary" in artifact_types
+
+    summary_path = tmp_path / "nanobot_mixed_summary.json"
+    assert summary_path.exists() is True
+    payload = _read_json(summary_path)
+    assert payload["execution_mode"] == "mixed"
+    assert payload["adb_calls"] == 3
+    assert payload["gui_task_calls"] == 1
+    assert payload["deeplink_calls"] == 1
+    assert payload["gui_steps"] == 7
 
 
 def test_runner_executes_with_framework_adapter_and_preserves_artifact_shape(tmp_path: Path):

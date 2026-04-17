@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+from pathlib import Path
 
 from mobile_world.agents.registry import create_framework_adapter, list_framework_profiles
 from mobile_world.core.api.info import list_framework_profiles_info
@@ -41,6 +42,10 @@ def test_eval_framework_config_loader(tmp_path):
             {
                 "framework_profile": "nanobot_opengui",
                 "nanobot_fork_path": "~/Project/nanobot_fork",
+                "nanobot_config_path": "/tmp/nanobot-config.json",
+                "gui_claw_path": "/tmp/gui-claw",
+                "evaluation_mode": "mixed",
+                "allow_adb_bypass": True,
                 "judge_model": "qwen3-vl-plus",
             }
         ),
@@ -48,6 +53,9 @@ def test_eval_framework_config_loader(tmp_path):
     )
     payload = load_framework_config(str(config_path))
     assert payload["framework_profile"] == "nanobot_opengui"
+    assert payload["nanobot_config_path"] == "/tmp/nanobot-config.json"
+    assert payload["evaluation_mode"] == "mixed"
+    assert payload["allow_adb_bypass"] is True
     assert payload["judge_model"] == "qwen3-vl-plus"
 
 
@@ -62,10 +70,21 @@ def test_eval_parser_accepts_framework_profile_flags():
             "nanobot_opengui",
             "--framework-config",
             "framework-profile.json",
+            "--nanobot-config-path",
+            "/tmp/nanobot.json",
+            "--gui-claw-path",
+            "/tmp/gui-claw",
+            "--evaluation-mode",
+            "mixed",
+            "--allow-adb-bypass",
         ]
     )
     assert args.framework_profile == "nanobot_opengui"
     assert args.framework_config == "framework-profile.json"
+    assert args.nanobot_config_path == "/tmp/nanobot.json"
+    assert args.gui_claw_path == "/tmp/gui-claw"
+    assert args.evaluation_mode == "mixed"
+    assert args.allow_adb_bypass is True
 
 
 def test_framework_inventory_exposes_capabilities_and_conformance():
@@ -78,7 +97,7 @@ def test_framework_inventory_exposes_capabilities_and_conformance():
     assert by_name["openclaw_template"].conformance in {"pass", "fail"}
 
 
-def test_eval_framework_config_profile_selection_is_deterministic(monkeypatch, tmp_path):
+def test_eval_framework_config_profile_selection_is_deterministic(monkeypatch, tmp_path: Path):
     captured_kwargs: dict = {}
 
     def _fake_run_agent_with_evaluation(**kwargs):
@@ -87,11 +106,18 @@ def test_eval_framework_config_profile_selection_is_deterministic(monkeypatch, t
 
     monkeypatch.setattr(eval_subcommand, "run_agent_with_evaluation", _fake_run_agent_with_evaluation)
 
+    nanobot_config = tmp_path / "nanobot-config.json"
+    nanobot_config.write_text(json.dumps({"gui": {"backend": "adb"}}, ensure_ascii=False, indent=2), encoding="utf-8")
+
     config_path = tmp_path / "framework-config.json"
     config_path.write_text(
         json.dumps(
             {
                 "framework_profile": "nanobot_opengui",
+                "nanobot_config_path": str(nanobot_config),
+                "gui_claw_path": str(tmp_path),
+                "evaluation_mode": "mixed",
+                "allow_adb_bypass": True,
                 "judge_model": "qwen3-vl-plus",
             }
         ),
@@ -117,3 +143,14 @@ def test_eval_framework_config_profile_selection_is_deterministic(monkeypatch, t
 
     assert captured_kwargs["framework_profile"] == "nanobot_opengui"
     assert captured_kwargs["agent_type"] == "qwen3vl"
+    assert captured_kwargs["nanobot_config_path"] == str(nanobot_config)
+    assert captured_kwargs["gui_claw_path"] == str(tmp_path)
+    assert captured_kwargs["evaluation_mode"] == "mixed"
+    assert captured_kwargs["allow_adb_bypass"] is True
+
+    manifest_path = tmp_path / "logs" / "run_manifest.json"
+    assert manifest_path.exists() is True
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest["framework_profile"] == "nanobot_opengui"
+    assert manifest["evaluation_mode"] == "mixed"
+    assert manifest["allow_adb_bypass"] is True

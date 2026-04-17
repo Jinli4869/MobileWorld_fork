@@ -1,6 +1,7 @@
 """Eval subcommand for MobileWorld CLI - Run benchmark evaluation suite."""
 
 import argparse
+import hashlib
 import json
 import os
 import time
@@ -24,6 +25,98 @@ def load_framework_config(path: str) -> dict:
     if not isinstance(payload, dict):
         raise ValueError(f"Framework config must be a JSON object: {config_path}")
     return payload
+
+
+_DEFAULT_NANOBOT_FORK_PATH = "/home/jinli/Project/nanobot_fork"
+_DEFAULT_GUI_CLAW_PATH = "/home/jinli/Project/GUI-Claw"
+_ALLOWED_EVALUATION_MODES = {"standard", "mixed"}
+
+
+def _normalize_bool(value: object, *, default: bool) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"1", "true", "yes", "on"}:
+            return True
+        if normalized in {"0", "false", "no", "off"}:
+            return False
+    return bool(value)
+
+
+def _path_fingerprint(path_value: str | None) -> dict:
+    if not path_value:
+        return {"path": None, "exists": False, "fingerprint": None, "path_type": None}
+
+    path = Path(path_value).expanduser().resolve()
+    exists = path.exists()
+    path_type = "file" if path.is_file() else "dir" if path.is_dir() else None
+
+    digest = hashlib.sha256()
+    digest.update(str(path).encode("utf-8"))
+    digest.update(str(exists).encode("utf-8"))
+    digest.update(str(path_type).encode("utf-8"))
+
+    if exists:
+        stat = path.stat()
+        digest.update(str(stat.st_size).encode("utf-8"))
+        digest.update(str(stat.st_mtime_ns).encode("utf-8"))
+        if path.is_file():
+            digest.update(path.read_bytes())
+
+    return {
+        "path": str(path),
+        "exists": exists,
+        "path_type": path_type,
+        "fingerprint": digest.hexdigest(),
+    }
+
+
+def _task_set_fingerprint(task_names: list[str]) -> str:
+    digest = hashlib.sha256()
+    payload = "\n".join(sorted(task_names))
+    digest.update(payload.encode("utf-8"))
+    return digest.hexdigest()
+
+
+def _write_run_manifest(
+    *,
+    run_root: str,
+    framework_profile: str | None,
+    evaluation_mode: str,
+    allow_adb_bypass: bool,
+    task_names: list[str],
+    framework_config_path: str | None,
+    nanobot_fork_path: str | None,
+    nanobot_config_path: str | None,
+    gui_claw_path: str | None,
+) -> Path:
+    output_root = Path(run_root).expanduser()
+    output_root.mkdir(parents=True, exist_ok=True)
+
+    canonical_tasks = sorted(task_names)
+    manifest = {
+        "schema_version": "1.0.0",
+        "generated_at": datetime.now().isoformat(),
+        "framework_profile": framework_profile,
+        "evaluation_mode": evaluation_mode,
+        "allow_adb_bypass": bool(allow_adb_bypass),
+        "task_set": canonical_tasks,
+        "task_set_fingerprint": _task_set_fingerprint(canonical_tasks),
+        "path_fingerprints": {
+            "framework_config_path": _path_fingerprint(framework_config_path),
+            "nanobot_fork_path": _path_fingerprint(nanobot_fork_path),
+            "nanobot_config_path": _path_fingerprint(nanobot_config_path),
+            "gui_claw_path": _path_fingerprint(gui_claw_path),
+        },
+    }
+
+    manifest_path = output_root / "run_manifest.json"
+    with manifest_path.open("w", encoding="utf-8") as f:
+        json.dump(manifest, f, ensure_ascii=False, indent=2)
+    return manifest_path
 
 
 def _add_common_arguments(parser: argparse.ArgumentParser) -> None:
@@ -211,7 +304,35 @@ def _add_common_arguments(parser: argparse.ArgumentParser) -> None:
         "--nanobot-fork-path",
         "--nanobot_fork_path",
         dest="nanobot_fork_path",
-        help="Path to nanobot_fork workspace for OpenGUI reference adapter integration",
+        help="Path to nanobot_fork workspace for nanobot_opengui mixed execution",
+    )
+    parser.add_argument(
+        "--nanobot-config-path",
+        "--nanobot_config_path",
+        dest="nanobot_config_path",
+        help="Path to fixed nanobot config file (required for nanobot_opengui)",
+    )
+    parser.add_argument(
+        "--gui-claw-path",
+        "--gui_claw_path",
+        dest="gui_claw_path",
+        default=_DEFAULT_GUI_CLAW_PATH,
+        help=f"GUI-Claw workspace path (default: {_DEFAULT_GUI_CLAW_PATH})",
+    )
+    parser.add_argument(
+        "--evaluation-mode",
+        "--evaluation_mode",
+        dest="evaluation_mode",
+        choices=["standard", "mixed"],
+        help="Evaluation mode used for reporting comparability (standard|mixed)",
+    )
+    parser.add_argument(
+        "--allow-adb-bypass",
+        "--allow_adb_bypass",
+        dest="allow_adb_bypass",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Allow mixed execution to bypass MobileWorld tool router and use ADB-capable framework lanes",
     )
 
 
@@ -270,6 +391,10 @@ async def execute(args: argparse.Namespace) -> None:
     log_file_root = args.log_file_root or args.output or "./traj_logs"
     framework_profile = getattr(args, "framework_profile", None)
     nanobot_fork_path = getattr(args, "nanobot_fork_path", None)
+    nanobot_config_path = getattr(args, "nanobot_config_path", None)
+    gui_claw_path = getattr(args, "gui_claw_path", _DEFAULT_GUI_CLAW_PATH)
+    evaluation_mode = getattr(args, "evaluation_mode", None)
+    allow_adb_bypass = getattr(args, "allow_adb_bypass", None)
     judge_model = getattr(args, "judge_model", "qwen3-vl-plus")
     judge_api_base = getattr(args, "judge_api_base", None)
     judge_api_key = (
@@ -284,9 +409,32 @@ async def execute(args: argparse.Namespace) -> None:
         config_payload = load_framework_config(framework_config_path)
         framework_profile = config_payload.get("framework_profile", framework_profile)
         nanobot_fork_path = config_payload.get("nanobot_fork_path", nanobot_fork_path)
+        nanobot_config_path = config_payload.get("nanobot_config_path", nanobot_config_path)
+        gui_claw_path = config_payload.get("gui_claw_path", gui_claw_path)
+        evaluation_mode = config_payload.get("evaluation_mode", evaluation_mode)
+        if "allow_adb_bypass" in config_payload:
+            allow_adb_bypass = config_payload.get("allow_adb_bypass")
         judge_model = config_payload.get("judge_model", judge_model)
         judge_api_base = config_payload.get("judge_api_base", judge_api_base)
         judge_api_key = config_payload.get("judge_api_key", judge_api_key)
+
+    if isinstance(evaluation_mode, str):
+        evaluation_mode = evaluation_mode.strip().lower()
+    if evaluation_mode and evaluation_mode not in _ALLOWED_EVALUATION_MODES:
+        raise ValueError(f"Invalid evaluation_mode: {evaluation_mode}")
+
+    if framework_profile == "nanobot_opengui":
+        nanobot_fork_path = nanobot_fork_path or _DEFAULT_NANOBOT_FORK_PATH
+        gui_claw_path = gui_claw_path or _DEFAULT_GUI_CLAW_PATH
+        evaluation_mode = evaluation_mode or "mixed"
+        allow_adb_bypass = _normalize_bool(allow_adb_bypass, default=True)
+        if not allow_adb_bypass:
+            raise ValueError("nanobot_opengui requires allow_adb_bypass=true")
+        if not nanobot_config_path:
+            raise ValueError("nanobot_config_path is required when framework_profile=nanobot_opengui")
+    else:
+        evaluation_mode = evaluation_mode or "standard"
+        allow_adb_bypass = _normalize_bool(allow_adb_bypass, default=False)
 
     # Check if running all tasks
     run_all_tasks = args.task and args.task.upper() == "ALL"
@@ -334,7 +482,35 @@ async def execute(args: argparse.Namespace) -> None:
         judge_api_base=judge_api_base,
         framework_profile=framework_profile,
         nanobot_fork_path=nanobot_fork_path,
+        nanobot_config_path=nanobot_config_path,
+        gui_claw_path=gui_claw_path,
+        evaluation_mode=evaluation_mode,
+        allow_adb_bypass=allow_adb_bypass,
     )
+    task_names_for_manifest = sorted(
+        {
+            str(item.get("task_name"))
+            for item in task_results
+            if isinstance(item, dict) and item.get("task_name")
+        }
+        | {str(task_name) for task_name in task_list_with_no_results}
+    )
+    if not task_names_for_manifest:
+        task_names_for_manifest = sorted({task for task in final_tasks if task})
+
+    run_manifest_path = _write_run_manifest(
+        run_root=log_file_root,
+        framework_profile=framework_profile,
+        evaluation_mode=evaluation_mode,
+        allow_adb_bypass=bool(allow_adb_bypass),
+        task_names=task_names_for_manifest,
+        framework_config_path=framework_config_path,
+        nanobot_fork_path=nanobot_fork_path,
+        nanobot_config_path=nanobot_config_path,
+        gui_claw_path=gui_claw_path,
+    )
+    logger.info("Run manifest written: {}", run_manifest_path)
+
     if run_all_tasks and task_results:
         total_duration = time.time() - start_time
 
@@ -382,6 +558,10 @@ async def execute(args: argparse.Namespace) -> None:
                 "model_name": args.model_name,
                 "timestamp": datetime.now().isoformat(),
                 "log_file_root": log_file_root,
+                "framework_profile": framework_profile,
+                "evaluation_mode": evaluation_mode,
+                "allow_adb_bypass": bool(allow_adb_bypass),
+                "run_manifest": str(run_manifest_path),
             },
             "tasks_with_results": task_results,
             "tasks_with_no_results": task_list_with_no_results,
@@ -441,6 +621,18 @@ async def execute(args: argparse.Namespace) -> None:
         metadata_text.append(f"Model: {report['metadata']['model_name'] or 'N/A'}\n", style="green")
         metadata_text.append(f"Timestamp: {report['metadata']['timestamp']}\n", style="green")
         metadata_text.append(f"Log Root: {report['metadata']['log_file_root']}\n", style="green")
+        metadata_text.append(
+            f"Framework Profile: {report['metadata'].get('framework_profile') or 'builtin'}\n",
+            style="green",
+        )
+        metadata_text.append(
+            f"Evaluation Mode: {report['metadata'].get('evaluation_mode')}\n",
+            style="green",
+        )
+        metadata_text.append(
+            f"Allow ADB Bypass: {report['metadata'].get('allow_adb_bypass')}\n",
+            style="green",
+        )
 
         metadata_panel = Panel(
             metadata_text, title="[bold]🔧 Configuration", border_style="green", padding=(1, 2)
@@ -490,6 +682,7 @@ async def execute(args: argparse.Namespace) -> None:
         # File locations panel
         files_text = Text()
         files_text.append(f"Results JSON: {report_file}\n", style="blue")
+        files_text.append(f"Run Manifest: {run_manifest_path}\n", style="blue")
         files_text.append(f"Trajectory Logs: {log_file_root}", style="blue")
 
         files_panel = Panel(

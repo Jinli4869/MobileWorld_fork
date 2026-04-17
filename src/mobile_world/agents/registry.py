@@ -103,6 +103,10 @@ def _nanobot_opengui_factory(**kwargs) -> FrameworkAdapter:
         llm_base_url=kwargs.get("llm_base_url"),
         api_key=kwargs.get("api_key"),
         nanobot_fork_path=kwargs.get("nanobot_fork_path"),
+        nanobot_config_path=kwargs.get("nanobot_config_path"),
+        gui_claw_path=kwargs.get("gui_claw_path"),
+        evaluation_mode=kwargs.get("evaluation_mode"),
+        allow_adb_bypass=kwargs.get("allow_adb_bypass"),
     )
 
 
@@ -130,8 +134,8 @@ def register_reference_framework_adapters() -> None:
             framework="nanobot_opengui",
             adapter_class=NanobotOpenGUIAdapter,
             factory=_nanobot_opengui_factory,
-            capabilities=["gui_action", "trajectory_judge"],
-            metadata={"source": "mobile_world.runtime.adapters.nanobot_opengui", "reference": True},
+            capabilities=["gui_action", "mixed_mode"],
+            metadata={"source": "mobile_world.runtime.adapters.nanobot_opengui", "execution": "mixed"},
         )
     if not has_adapter("openclaw_template"):
         register_adapter_profile(
