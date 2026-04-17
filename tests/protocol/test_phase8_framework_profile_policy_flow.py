@@ -6,6 +6,7 @@ from queue import Queue
 
 from mobile_world.core import runner as runner_module
 from mobile_world.runtime.protocol.capability_policy import CapabilityDecision
+from mobile_world.runtime.utils.trajectory_logger import CANONICAL_META_FILE_NAME, LOG_FILE_NAME
 
 
 class DummyEnv:
@@ -93,3 +94,31 @@ def test_runner_uses_framework_profile_for_policy_resolution(monkeypatch, tmp_pa
     assert result["task_name"] == "task_phase8_framework_mode"
     assert result["score"] == 1.0
     assert captured_profiles == ["nanobot_opengui"]
+
+
+def test_policy_manifest_profile_name_matches_effective_profile(monkeypatch, tmp_path: Path):
+    _run_process_task(
+        monkeypatch=monkeypatch,
+        tmp_path=tmp_path,
+        task_name="task_phase8_framework_manifest",
+        framework_profile="nanobot_opengui",
+    )
+    _run_process_task(
+        monkeypatch=monkeypatch,
+        tmp_path=tmp_path,
+        task_name="task_phase8_builtin_manifest",
+        framework_profile=None,
+    )
+
+    framework_task_dir = tmp_path / "task_phase8_framework_manifest"
+    builtin_task_dir = tmp_path / "task_phase8_builtin_manifest"
+
+    framework_legacy = _read_json(framework_task_dir / LOG_FILE_NAME)
+    framework_meta = _read_json(framework_task_dir / CANONICAL_META_FILE_NAME)
+    builtin_legacy = _read_json(builtin_task_dir / LOG_FILE_NAME)
+    builtin_meta = _read_json(builtin_task_dir / CANONICAL_META_FILE_NAME)
+
+    assert framework_legacy["0"]["policy_manifest"]["profile_name"] == "nanobot_opengui"
+    assert framework_meta["policy_manifest"]["profile_name"] == "nanobot_opengui"
+    assert builtin_legacy["0"]["policy_manifest"]["profile_name"] == "qwen3vl"
+    assert builtin_meta["policy_manifest"]["profile_name"] == "qwen3vl"
