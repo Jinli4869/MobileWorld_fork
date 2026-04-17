@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: planned
-stopped_at: Completed Phase 08 execution
-last_updated: "2026-04-17T08:30:31.000Z"
+stopped_at: Planned Phase 09 (3 plans)
+last_updated: "2026-04-17T08:48:32.000Z"
 last_activity: 2026-04-17
 progress:
   total_phases: 10
@@ -25,9 +25,9 @@ See: .planning/PROJECT.md (updated 2026-04-17)
 
 ## Current Position
 
-Phase: 09 (reproducibility-agreement-gate-hardening) — PENDING
+Phase: 09 (reproducibility-agreement-gate-hardening) — PLANNED
 Plan: 0 of 3
-Status: Ready to plan and execute
+Status: Ready to execute
 Last activity: 2026-04-17
 
 Progress: [█████████░] 91%
@@ -85,6 +85,8 @@ Recent decisions affecting current work:
 - [Phase 08]: Use `effective_policy_profile = framework_profile or agent_type` as the single runner policy identity source.
 - [Phase 08]: Verify policy-manifest profile alignment in both legacy and canonical artifacts.
 - [Phase 08]: Lock eval CLI framework-profile propagation semantics with deterministic regression coverage.
+- [Phase 09 Planning]: Treat missing judge-agreement data as unavailable state rather than automatic gate failure.
+- [Phase 09 Planning]: Keep judge-agreement threshold enforcement strict when agreement checks exist.
 
 ### Pending Todos
 
@@ -102,6 +104,6 @@ None currently.
 
 ## Session Continuity
 
-Last session: 2026-04-17T08:30:31.000Z
-Stopped at: Completed Phase 08 execution
+Last session: 2026-04-17T08:48:32.000Z
+Stopped at: Planned Phase 09 (3 plans)
 Resume file: None
