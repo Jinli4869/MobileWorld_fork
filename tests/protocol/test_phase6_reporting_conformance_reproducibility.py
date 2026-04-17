@@ -138,6 +138,53 @@ def _task_artifact_bundle(
     (task_dir / SCORE_FILE_NAME).write_text(f"score: {score}\nreason: synthetic", encoding="utf-8")
 
 
+def _task_mixed_summary(
+    task_dir: Path,
+    *,
+    adb_calls: int,
+    gui_task_calls: int,
+    deeplink_calls: int,
+    gui_steps: int,
+) -> None:
+    summary = {
+        "execution_mode": "mixed",
+        "adb_calls": adb_calls,
+        "gui_task_calls": gui_task_calls,
+        "deeplink_calls": deeplink_calls,
+        "gui_steps": gui_steps,
+        "trace_refs": [],
+    }
+    _write_json(task_dir / "nanobot_mixed_summary.json", summary)
+
+
+def _write_run_manifest(
+    run_root: Path,
+    *,
+    framework_profile: str,
+    evaluation_mode: str,
+    allow_adb_bypass: bool,
+    task_names: list[str],
+) -> None:
+    _write_json(
+        run_root / "run_manifest.json",
+        {
+            "schema_version": "1.0.0",
+            "generated_at": "2026-01-01T00:00:00",
+            "framework_profile": framework_profile,
+            "evaluation_mode": evaluation_mode,
+            "allow_adb_bypass": allow_adb_bypass,
+            "task_set": sorted(task_names),
+            "task_set_fingerprint": "test",
+            "path_fingerprints": {
+                "framework_config_path": {"path": None, "exists": False, "fingerprint": None, "path_type": None},
+                "nanobot_fork_path": {"path": None, "exists": False, "fingerprint": None, "path_type": None},
+                "nanobot_config_path": {"path": None, "exists": False, "fingerprint": None, "path_type": None},
+                "gui_claw_path": {"path": None, "exists": False, "fingerprint": None, "path_type": None},
+            },
+        },
+    )
+
+
 def test_convert_legacy_trajectory_to_canonical(tmp_path: Path):
     legacy_dir = tmp_path / "legacy_task"
     legacy_dir.mkdir(parents=True)
@@ -249,6 +296,96 @@ def test_aggregate_framework_runs_builds_kpi_panels(tmp_path: Path):
     efficiency = {row["framework"]: row for row in report["kpi_panels"]["efficiency"]}
     assert efficiency["nanobot"]["tokens_per_success"] == 100.0
     assert efficiency["openclaw"]["tokens_per_success"] == 100.0
+
+
+def test_aggregate_framework_runs_supports_leaderboards_by_mode(tmp_path: Path):
+    run_mixed = tmp_path / "mixed_run"
+    run_standard = tmp_path / "standard_run"
+
+    _task_artifact_bundle(
+        run_mixed,
+        task_name="task_alpha",
+        score=1.0,
+        total_tokens=200,
+        ttft_ms=120.0,
+        tool_success_rate=1.0,
+        invalid_action_rate=0.0,
+        cost_per_success=0.11,
+        judge_agreement=True,
+    )
+    _task_artifact_bundle(
+        run_mixed,
+        task_name="task_beta",
+        score=0.2,
+        total_tokens=140,
+        ttft_ms=130.0,
+        tool_success_rate=0.7,
+        invalid_action_rate=0.2,
+        cost_per_success=0.17,
+        judge_agreement=False,
+    )
+    _task_mixed_summary(
+        run_mixed / "task_alpha",
+        adb_calls=2,
+        gui_task_calls=1,
+        deeplink_calls=0,
+        gui_steps=8,
+    )
+    _task_mixed_summary(
+        run_mixed / "task_beta",
+        adb_calls=4,
+        gui_task_calls=2,
+        deeplink_calls=1,
+        gui_steps=12,
+    )
+    _write_run_manifest(
+        run_mixed,
+        framework_profile="nanobot_opengui",
+        evaluation_mode="mixed",
+        allow_adb_bypass=True,
+        task_names=["task_alpha", "task_beta"],
+    )
+
+    _task_artifact_bundle(
+        run_standard,
+        task_name="task_alpha",
+        score=1.0,
+        total_tokens=90,
+        ttft_ms=80.0,
+        tool_success_rate=1.0,
+        invalid_action_rate=0.0,
+        cost_per_success=0.08,
+        judge_agreement=True,
+    )
+    _task_artifact_bundle(
+        run_standard,
+        task_name="task_beta",
+        score=1.0,
+        total_tokens=100,
+        ttft_ms=90.0,
+        tool_success_rate=0.9,
+        invalid_action_rate=0.0,
+        cost_per_success=0.09,
+        judge_agreement=True,
+    )
+
+    report = aggregate_framework_runs(
+        framework_runs={"nanobot": str(run_mixed), "openclaw": str(run_standard)},
+        success_threshold=0.99,
+    )
+
+    assert report["common_tasks"] == ["task_alpha", "task_beta"]
+    assert report["framework_modes"]["nanobot"]["evaluation_mode"] == "mixed"
+    assert report["framework_modes"]["openclaw"]["evaluation_mode"] == "standard"
+    assert report["leaderboards"]["mixed"][0]["framework"] == "nanobot"
+    assert report["leaderboards"]["standard"][0]["framework"] == "openclaw"
+    assert "lane_metrics" in report["leaderboards"]["mixed"][0]
+    assert report["leaderboards"]["mixed"][0]["lane_metrics"]["adb_calls"] == 6
+    assert report["leaderboard"][0]["framework"] == "openclaw"
+    assert any(
+        "mixed leaderboard allows ADB/deeplink/gui_task bypass lanes" in note
+        for note in report["comparability_notes"]
+    )
 
 
 def test_conformance_suite_passes_for_valid_artifacts(tmp_path: Path):

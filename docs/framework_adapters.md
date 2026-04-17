@@ -36,9 +36,15 @@ Example `framework-profile.json`:
 {
   "framework_profile": "nanobot_opengui",
   "nanobot_fork_path": "~/Project/nanobot_fork",
+  "nanobot_config_path": "~/Project/nanobot_fork/config/opengui.json",
+  "gui_claw_path": "/home/jinli/Project/GUI-Claw",
+  "evaluation_mode": "mixed",
+  "allow_adb_bypass": true,
   "judge_model": "qwen3-vl-plus"
 }
 ```
+
+`nanobot_opengui` requires `nanobot_config_path`, and mixed-mode execution should set `evaluation_mode: "mixed"` and `allow_adb_bypass: true` for stable cross-framework comparability.
 
 ## Adapter Scaffold TODOs
 
