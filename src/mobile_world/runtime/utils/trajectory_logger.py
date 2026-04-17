@@ -230,6 +230,15 @@ class TrajLogger:
         self._append_canonical_event(header_event)
         self._canonical_header_emitted = True
 
+    def _ensure_runtime_header(self) -> None:
+        """Ensure canonical header exists for run-level events emitted before log_traj()."""
+        task_name = os.path.basename(self.log_file_dir)
+        self._ensure_canonical_header_event(
+            task_name=task_name,
+            task_goal=self._infer_task_goal_for_header(),
+            run_id=f"{task_name}-0",
+        )
+
     def artifact_paths(self) -> dict[str, str]:
         canonical_log_path, canonical_meta_path = self._canonical_paths()
         return {
@@ -371,6 +380,7 @@ class TrajLogger:
         with open(legacy_path, "w", encoding="utf-8") as f:
             json.dump(legacy, f, ensure_ascii=False, indent=4)
 
+        self._ensure_runtime_header()
         self._append_canonical_event(
             {
                 "type": "tool_error",
@@ -397,6 +407,7 @@ class TrajLogger:
         with open(legacy_path, "w", encoding="utf-8") as f:
             json.dump(legacy, f, ensure_ascii=False, indent=4)
 
+        self._ensure_runtime_header()
         self._append_canonical_event(
             {
                 "type": "metrics_step",
@@ -431,6 +442,7 @@ class TrajLogger:
         with open(meta_path, "w", encoding="utf-8") as f:
             json.dump(meta, f, ensure_ascii=False, indent=4)
 
+        self._ensure_runtime_header()
         self._append_canonical_event(
             {
                 "type": "evaluator_audit",
@@ -535,6 +547,7 @@ class TrajLogger:
         with open(meta_path, "w", encoding="utf-8") as f:
             json.dump(meta, f, ensure_ascii=False, indent=4)
 
+        self._ensure_runtime_header()
         self._append_canonical_event(
             {
                 "type": "adapter_artifacts",
@@ -612,4 +625,5 @@ class TrajLogger:
             json.dump({}, f)
 
         self.tools = None
+        self._canonical_header_emitted = False
         logger.info(f"Trajectory reset with backup timestamp: {timestamp}")

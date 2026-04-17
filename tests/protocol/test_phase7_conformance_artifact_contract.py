@@ -185,3 +185,50 @@ def test_benchmark_conformance_cli_succeeds_for_runtime_artifacts(tmp_path: Path
     report = json.loads(output_path.read_text(encoding="utf-8"))
     assert output_path.exists() is True
     assert report["ok"] is True
+
+
+def test_reset_traj_reemits_single_header_for_new_run(tmp_path: Path):
+    traj_logger = TrajLogger(str(tmp_path), "task_reset")
+    traj_logger.log_evaluator_audit({"evaluator_name": "task_native", "score": 1.0})
+    traj_logger.log_score(score=1.0, reason="ok", evaluator_name="task_native")
+
+    traj_logger.reset_traj()
+
+    traj_logger.log_evaluator_audit({"evaluator_name": "task_native", "score": 0.5})
+    traj_logger.log_score(score=0.5, reason="retry", evaluator_name="task_native")
+
+    canonical_path = tmp_path / "task_reset" / "traj.canonical.jsonl"
+    events = [
+        json.loads(line)
+        for line in canonical_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+    assert events[0]["type"] == "header"
+    assert sum(1 for event in events if event.get("type") == "header") == 1
+    assert events[-2]["type"] == "evaluator_audit"
+    assert events[-1]["type"] == "score"
+
+
+def test_evaluator_audit_keeps_order_when_logged_before_score(tmp_path: Path):
+    traj_logger = TrajLogger(str(tmp_path), "task_order")
+    traj_logger.log_evaluator_audit(
+        {
+            "evaluator_name": "task_native",
+            "primary_signal": "task_native",
+            "score": 0.75,
+            "reason": "partially complete",
+        }
+    )
+    traj_logger.log_score(score=0.75, reason="partially complete", evaluator_name="task_native")
+
+    canonical_path = tmp_path / "task_order" / "traj.canonical.jsonl"
+    events = [
+        json.loads(line)
+        for line in canonical_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+    assert events[0]["type"] == "header"
+    assert events[-2]["type"] == "evaluator_audit"
+    assert events[-1]["type"] == "score"
