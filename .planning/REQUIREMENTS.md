@@ -33,8 +33,8 @@
 - [x] **METR-03**: System records TTFA, TTS, step latency p50/p95, and tool latency p50/p95 for all frameworks.
 - [x] **METR-04**: System reports efficiency/cost metrics including tokens per success and cost per success.
 - [x] **METR-05**: System reports reliability metrics including tool success rate, tool retry rate, and invalid action rate.
-- [ ] **METR-06**: System reports stability metrics including reproducibility variance across repeated fixed-config runs.
-- [ ] **METR-07**: System reports evaluator quality metrics including deterministic evaluator vs LLM-judge agreement rate.
+- [x] **METR-06**: System reports stability metrics including reproducibility variance across repeated fixed-config runs.
+- [x] **METR-07**: System reports evaluator quality metrics including deterministic evaluator vs LLM-judge agreement rate.
 
 ### Trajectory & Artifacts
 
@@ -53,7 +53,7 @@
 
 - [x] **COMP-01**: Existing built-in agent eval/test workflows remain functional without adapter migration.
 - [x] **COMP-02**: Conformance test suite validates adapter contract, tool routing, and evaluator output shape.
-- [ ] **COMP-03**: Regression tests ensure benchmark reproducibility between repeated runs under same config.
+- [x] **COMP-03**: Regression tests ensure benchmark reproducibility between repeated runs under same config.
 
 ## v2 Requirements
 
@@ -99,20 +99,20 @@
 | INTG-03 | Phase 8 | Complete |
 | INTG-04 | Phase 5 | Complete |
 | METR-04 | Phase 6 | Complete |
-| METR-06 | Phase 9 | Pending |
-| METR-07 | Phase 9 | Pending |
+| METR-06 | Phase 9 | Complete |
+| METR-07 | Phase 9 | Complete |
 | TRCE-02 | Phase 6 | Complete |
 | TRCE-03 | Phase 6 | Complete |
 | COMP-02 | Phase 7 | Complete |
-| COMP-03 | Phase 9 | Pending |
+| COMP-03 | Phase 9 | Complete |
 
 **Coverage:**
 - v1 requirements: 29 total
-- Checked-off: 22
-- Pending rework from milestone gaps: 7
+- Checked-off: 25
+- Pending rework from milestone gaps: 4
 - Mapped to phases: 29
 - Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-04-16*
-*Last updated: 2026-04-17 after milestone gap-closure phases 7-9 were added*
+*Last updated: 2026-04-17 after Phase 9 completion*

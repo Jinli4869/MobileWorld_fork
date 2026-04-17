@@ -19,7 +19,7 @@ This roadmap upgrades MobileWorld from built-in-agent evaluation to a protocol-d
 - [x] **Phase 6: Reporting, Conformance & Reproducibility** - Finalize cross-framework comparison and QA guarantees (completed 2026-04-17)
 - [x] **Phase 7: Conformance Artifact Contract Closure** - Align runtime artifact outputs with conformance validator expectations (completed 2026-04-17)
 - [x] **Phase 8: Framework Profile Policy Flow Repair** - Restore framework-profile capability policy correctness in adapter-mode runs (completed 2026-04-17)
-- [ ] **Phase 9: Reproducibility Agreement Gate Hardening** - Make reproducibility pass criteria robust when judge agreement is unavailable
+- [x] **Phase 9: Reproducibility Agreement Gate Hardening** - Make reproducibility pass criteria robust when judge agreement is unavailable (completed 2026-04-17)
 
 ## Phase Details
 
@@ -185,9 +185,9 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 09-01: Refine reproducibility gate logic for missing judge agreement signal
-- [ ] 09-02: Add explicit reporting fields for agreement availability and threshold outcomes
-- [ ] 09-03: Add regression tests for judge-available and judge-unavailable runs
+- [x] 09-01: Refine reproducibility gate logic for missing judge agreement signal
+- [x] 09-02: Add explicit reporting fields for agreement availability and threshold outcomes
+- [x] 09-03: Add regression tests for judge-available and judge-unavailable runs
 
 ## Progress
 
@@ -205,4 +205,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 3.1 -> 4 -> 5 -> 6 -> 7 -> 8 -> 
 | 6. Reporting, Conformance & Reproducibility | 4/4 | Completed | 2026-04-17 |
 | 7. Conformance Artifact Contract Closure | 3/3 | Completed | 2026-04-17 |
 | 8. Framework Profile Policy Flow Repair | 3/3 | Completed | 2026-04-17 |
-| 9. Reproducibility Agreement Gate Hardening | 0/3 | Pending | - |
+| 9. Reproducibility Agreement Gate Hardening | 3/3 | Completed | 2026-04-17 |

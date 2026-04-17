@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: planned
-stopped_at: Planned Phase 09 (3 plans)
-last_updated: "2026-04-17T08:48:32.000Z"
+status: complete
+stopped_at: Completed Phase 09 execution
+last_updated: "2026-04-17T08:59:20.000Z"
 last_activity: 2026-04-17
 progress:
   total_phases: 10
-  completed_phases: 9
+  completed_phases: 10
   total_plans: 35
-  completed_plans: 32
-  percent: 91
+  completed_plans: 35
+  percent: 100
 ---
 
 # Project State
@@ -21,22 +21,22 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-17)
 
 **Core value:** One benchmark, one task standard, one evaluator contract, multiple agent frameworks with reproducible and comparable results.
-**Current focus:** Phase 09 — reproducibility-agreement-gate-hardening
+**Current focus:** Milestone v1.0 complete — ready for closeout
 
 ## Current Position
 
-Phase: 09 (reproducibility-agreement-gate-hardening) — PLANNED
-Plan: 0 of 3
-Status: Ready to execute
+Phase: 09 (reproducibility-agreement-gate-hardening) — COMPLETE
+Plan: 3 of 3
+Status: Phase complete; ready for milestone closeout
 Last activity: 2026-04-17
 
-Progress: [█████████░] 91%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 32
+- Total plans completed: 35
 - Average duration: 0.5 hours/plan
 - Total execution time: 8.0 hours
 
@@ -54,7 +54,7 @@ Progress: [█████████░] 91%
 
 **Recent Trend:**
 
-- Last 5 plans: 07-02, 07-03, 08-01, 08-02, 08-03
+- Last 5 plans: 08-02, 08-03, 09-01, 09-02, 09-03
 - Trend: Positive
 
 *Updated after each plan completion*
@@ -64,6 +64,9 @@ Progress: [█████████░] 91%
 | Phase 08 P01 | 4 min | 1 task  | 1 file  |
 | Phase 08 P02 | 7 min | 3 tasks | 1 file  |
 | Phase 08 P03 | 8 min | 3 tasks | 3 files |
+| Phase 09 P01 | 3 min | 1 task  | 1 file  |
+| Phase 09 P02 | 2 min | 3 tasks | 3 files |
+| Phase 09 P03 | 3 min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -87,6 +90,8 @@ Recent decisions affecting current work:
 - [Phase 08]: Lock eval CLI framework-profile propagation semantics with deterministic regression coverage.
 - [Phase 09 Planning]: Treat missing judge-agreement data as unavailable state rather than automatic gate failure.
 - [Phase 09 Planning]: Keep judge-agreement threshold enforcement strict when agreement checks exist.
+- [Phase 09]: Add explicit agreement availability/status and gate-summary fields to reproducibility reports.
+- [Phase 09]: Enforce availability-aware reproducibility gating with deterministic regression coverage for unavailable and enforced agreement branches.
 
 ### Pending Todos
 
@@ -104,6 +109,6 @@ None currently.
 
 ## Session Continuity
 
-Last session: 2026-04-17T08:48:32.000Z
-Stopped at: Planned Phase 09 (3 plans)
+Last session: 2026-04-17T08:59:20.000Z
+Stopped at: Completed Phase 09 execution
 Resume file: None
