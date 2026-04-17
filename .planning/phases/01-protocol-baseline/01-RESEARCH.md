@@ -109,13 +109,13 @@ External reference patterns in `~/Project/nanobot_fork` reinforce this direction
 </common_pitfalls>
 
 <open_questions>
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. Should canonical trajectory become JSONL immediately or dual-write JSON + JSONL for one phase?
-   - Recommendation: dual-write in Phase 1 for compatibility, enforce canonical-only in later phases.
+   - RESOLVED: Phase 1 uses dual-write (`traj.json` + `traj.canonical.jsonl`/canonical meta) to preserve compatibility; canonical-only output is deferred to a later phase after compatibility validation.
 
 2. Where should adapter registration metadata live (agent registry vs separate adapter registry)?
-   - Recommendation: start with dedicated protocol registry module, keep agent registry bridge for backward compatibility.
+   - RESOLVED: Adapter registration metadata is owned by `src/mobile_world/runtime/protocol/registry.py`; `src/mobile_world/agents/registry.py` provides a compatibility bridge for existing CLI/agent flows.
 </open_questions>
 
 <sources>
