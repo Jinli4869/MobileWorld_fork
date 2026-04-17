@@ -78,3 +78,18 @@ def _run_process_task(
         framework_profile=framework_profile,
         nanobot_fork_path=None,
     )
+
+
+def test_runner_uses_framework_profile_for_policy_resolution(monkeypatch, tmp_path: Path):
+    captured_profiles: list[str] = []
+    result = _run_process_task(
+        monkeypatch=monkeypatch,
+        tmp_path=tmp_path,
+        task_name="task_phase8_framework_mode",
+        framework_profile="nanobot_opengui",
+        captured_profiles=captured_profiles,
+    )
+
+    assert result["task_name"] == "task_phase8_framework_mode"
+    assert result["score"] == 1.0
+    assert captured_profiles == ["nanobot_opengui"]
