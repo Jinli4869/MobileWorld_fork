@@ -173,9 +173,21 @@ async def execute(args: argparse.Namespace) -> None:
         if args.output:
             _write_json(args.output, report)
             console.print(f"Reproducibility report written: {Path(args.output).expanduser()}")
+        evaluation_quality = report.get("evaluation_quality", {})
+        agreement_status = evaluation_quality.get("agreement_status")
+        if agreement_status not in {"passed", "failed", "unavailable"}:
+            agreement_passed = evaluation_quality.get("agreement_passed")
+            if agreement_passed is True:
+                agreement_status = "passed"
+            elif agreement_passed is False:
+                agreement_status = "failed"
+            else:
+                agreement_status = "unavailable"
+        judge_checks_total = int(evaluation_quality.get("judge_checks_total", 0))
         console.print(
             f"Reproducibility status: {'PASS' if report['ok'] else 'FAIL'} "
-            f"(common tasks: {len(report['common_tasks'])})"
+            f"(common tasks: {len(report['common_tasks'])}; "
+            f"agreement: {agreement_status}; judge checks: {judge_checks_total})"
         )
         if not report["ok"]:
             console.print_json(data=json.dumps(report, ensure_ascii=False))
