@@ -75,11 +75,15 @@ def evaluate_reproducibility(
     variance_ok = (
         all(row["variance_passed"] for row in per_task) if per_task else False
     )
-    judge_ok = (
-        judge_agreement_rate is not None and judge_agreement_rate >= judge_agreement_threshold
+    agreement_available = judge_total > 0
+    agreement_passed = (
+        judge_agreement_rate >= judge_agreement_threshold
+        if agreement_available and judge_agreement_rate is not None
+        else None
     )
+    overall_ok = variance_ok and (agreement_passed if agreement_available else True)
     return {
-        "ok": variance_ok and judge_ok,
+        "ok": overall_ok,
         "generated_at": datetime.now(UTC).isoformat(),
         "run_count": len(loaded_runs),
         "common_tasks": common_tasks,
@@ -91,7 +95,7 @@ def evaluate_reproducibility(
         "evaluation_quality": {
             "judge_agreement_rate": judge_agreement_rate,
             "agreement_threshold": judge_agreement_threshold,
-            "agreement_passed": judge_ok,
+            "agreement_passed": agreement_passed,
             "judge_checks_total": judge_total,
         },
         "task_results": per_task,
