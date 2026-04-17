@@ -80,9 +80,24 @@ def test_trajectory_logger_writes_legacy_and_canonical_artifacts(tmp_path: Path)
     assert canonical_meta["tools"][0]["name"] == "mcp_demo"
 
     events = _load_jsonl(canonical_jsonl_path)
-    assert len(events) == 2
-    step_event = events[0]
-    score_event = events[1]
+    header_events = [event for event in events if event.get("type") == "header"]
+    step_events = [event for event in events if event.get("type") == "step"]
+    score_events = [event for event in events if event.get("type") == "score"]
+
+    assert len(events) == 3
+    assert len(header_events) == 1
+    assert len(step_events) == 1
+    assert len(score_events) == 1
+
+    header_event = header_events[0]
+    step_event = step_events[0]
+    score_event = score_events[0]
+
+    assert header_event["schema_version"] == "1.0.0"
+    assert header_event["task_name"] == "task_alpha"
+    assert header_event["task_goal"] == "click target"
+    assert header_event["run_id"] == "task_alpha-0"
+    assert header_event["tools"][0]["name"] == "mcp_demo"
 
     assert step_event["type"] == "step"
     assert step_event["schema_version"] == "1.0.0"
