@@ -1,10 +1,12 @@
 """Phase 5 framework expansion and CLI profile tests."""
 
+import asyncio
 import json
 
 from mobile_world.agents.registry import create_framework_adapter, list_framework_profiles
 from mobile_world.core.api.info import list_framework_profiles_info
 from mobile_world.core.cli import create_parser
+from mobile_world.core.subcommands import eval as eval_subcommand
 from mobile_world.core.subcommands.eval import load_framework_config
 from mobile_world.runtime.adapters.hermes_template import HermesTemplateAdapter
 from mobile_world.runtime.adapters.openclaw_template import OpenClawTemplateAdapter
@@ -74,3 +76,44 @@ def test_framework_inventory_exposes_capabilities_and_conformance():
     assert "nanobot_opengui" in by_name
     assert "gui_action" in by_name["openclaw_template"].capabilities
     assert by_name["openclaw_template"].conformance in {"pass", "fail"}
+
+
+def test_eval_framework_config_profile_selection_is_deterministic(monkeypatch, tmp_path):
+    captured_kwargs: dict = {}
+
+    def _fake_run_agent_with_evaluation(**kwargs):
+        captured_kwargs.update(kwargs)
+        return [], []
+
+    monkeypatch.setattr(eval_subcommand, "run_agent_with_evaluation", _fake_run_agent_with_evaluation)
+
+    config_path = tmp_path / "framework-config.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "framework_profile": "nanobot_opengui",
+                "judge_model": "qwen3-vl-plus",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    parser = create_parser()
+    args = parser.parse_args(
+        [
+            "eval",
+            "--agent-type",
+            "qwen3vl",
+            "--framework-profile",
+            "hermes_template",
+            "--framework-config",
+            str(config_path),
+            "--output",
+            str(tmp_path / "logs"),
+        ]
+    )
+
+    asyncio.run(eval_subcommand.execute(args))
+
+    assert captured_kwargs["framework_profile"] == "nanobot_opengui"
+    assert captured_kwargs["agent_type"] == "qwen3vl"
