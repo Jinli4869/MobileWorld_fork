@@ -112,7 +112,7 @@ def test_router_normalizes_execution_error():
     assert result.error.details["exception_type"] == "RuntimeError"
 
 
-def test_tool_manifest_and_error_logged_to_artifacts(tmp_path: Path):
+def test_tool_and_policy_manifest_and_error_logged_to_artifacts(tmp_path: Path):
     traj_logger = TrajLogger(str(tmp_path), "task_beta")
     manifest = {
         "enabled_tool_classes": ["gui"],
@@ -121,6 +121,7 @@ def test_tool_manifest_and_error_logged_to_artifacts(tmp_path: Path):
         "source": "policy:test",
     }
     traj_logger.log_tool_manifest(manifest)
+    traj_logger.log_policy_manifest(manifest)
     traj_logger.log_tool_error(step=3, error={"code": "CAPABILITY_DENIED", "message": "denied"})
 
     task_dir = tmp_path / "task_beta"
@@ -129,6 +130,8 @@ def test_tool_manifest_and_error_logged_to_artifacts(tmp_path: Path):
     canonical_events = _read_jsonl(task_dir / CANONICAL_LOG_FILE_NAME)
 
     assert legacy["0"]["tool_manifest"]["source"] == "policy:test"
+    assert legacy["0"]["policy_manifest"]["source"] == "policy:test"
     assert canonical_meta["tool_manifest"]["mcp_timeout_seconds"] == 120
+    assert canonical_meta["policy_manifest"]["mcp_timeout_seconds"] == 120
     assert canonical_events[-1]["type"] == "tool_error"
     assert canonical_events[-1]["error"]["code"] == "CAPABILITY_DENIED"
