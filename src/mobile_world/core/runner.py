@@ -366,6 +366,7 @@ def _process_task_on_env(
                 policy_path=policy_path,
                 mcp_allowlist_override=allowlist_override,
             )
+            capability_manifest = capability_decision.as_manifest()
 
             if enable_mcp:
                 assert isinstance(env, AndroidMCPEnvClient), (
@@ -382,7 +383,8 @@ def _process_task_on_env(
                     return None
                 traj_logger.log_tools(env.tools)
 
-            traj_logger.log_tool_manifest(capability_decision.as_manifest())
+            traj_logger.log_tool_manifest(capability_manifest)
+            traj_logger.log_policy_manifest(capability_manifest)
             tool_router = UnifiedToolRouter(capability_decision)
             evaluator = create_evaluator(
                 "task_native",
