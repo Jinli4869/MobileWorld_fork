@@ -70,3 +70,12 @@ Outputs include:
 - per-task score variance and pass/fail
 - overall reproducibility variance
 - judge agreement rate and threshold verdict
+- `evaluation_quality.agreement_available`: whether any judge checks were present
+- `evaluation_quality.agreement_status`: one of `passed`, `failed`, or `unavailable`
+- `evaluation_quality.agreement_passed`: boolean when available, `null` when unavailable
+- `gate_summary`: explicit stability gate, agreement gate, and overall status fields
+
+Agreement semantics:
+
+- If judge checks are unavailable, reproducibility can still pass when variance checks pass.
+- If judge checks are available, agreement threshold enforcement remains mandatory.
