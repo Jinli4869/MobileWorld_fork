@@ -358,9 +358,11 @@ def _process_task_on_env(
             except Exception:
                 logger.exception("Failed to load task metadata for capability policy")
 
+            effective_policy_profile = framework_profile or agent_type
+
             capability_decision = resolve_capability_policy(
                 task_tags=task_tags,
-                profile_name=agent_type,
+                profile_name=effective_policy_profile,
                 enable_mcp=enable_mcp,
                 enable_user_interaction=enable_user_interaction,
                 policy_path=policy_path,
