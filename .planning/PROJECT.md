@@ -17,6 +17,7 @@ One benchmark, one task standard, one evaluator contract, multiple agent framewo
 - ✓ MobileWorld already supports multiple built-in agent implementations and allows loading custom agent classes from external `.py` files — existing
 - ✓ MobileWorld already captures trajectory logs and per-task scores for benchmark reporting — existing
 - ✓ Framework-profile eval flow now uses profile-bound capability policy semantics with deterministic artifact alignment (`policy_manifest.profile_name`) — validated in Phase 8
+- ✓ Reproducibility reporting now distinguishes stability pass from agreement availability and enforces agreement thresholds only when judge checks exist — validated in Phase 9
 
 ### Active
 
@@ -74,8 +75,8 @@ This document evolves at phase transitions and milestone boundaries.
 
 ## Current State
 
-- Phase 8 complete: framework-profile capability policy flow repaired and regression-protected.
-- Next focus: Phase 9 (reproducibility agreement gate hardening).
+- Phase 9 complete: reproducibility agreement gate hardening shipped with explicit availability-aware gate semantics and regression coverage.
+- Next focus: milestone closeout and transition planning.
 
 **After each phase transition** (via `$gsd-transition`):
 1. Requirements invalidated? -> Move to Out of Scope with reason
@@ -91,4 +92,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-17 after Phase 8 completion*
+*Last updated: 2026-04-17 after Phase 9 completion*
