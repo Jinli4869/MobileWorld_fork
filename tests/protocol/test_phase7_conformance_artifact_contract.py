@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from PIL import Image
@@ -102,6 +103,10 @@ def _checks_by_name(report: dict) -> dict[str, dict]:
     return {check["name"]: check for check in checks}
 
 
+def _failed_checks(report: dict) -> set[str]:
+    return {check["name"] for check in report["tasks"][0]["checks"] if not check["passed"]}
+
+
 def test_runtime_artifacts_pass_conformance(tmp_path: Path):
     run_root, _ = _generate_runtime_artifacts(tmp_path / "runtime_run")
     report = run_conformance_suite(str(run_root))
@@ -111,3 +116,47 @@ def test_runtime_artifacts_pass_conformance(tmp_path: Path):
     assert report["ok"] is True
     assert checks["canonical.header_present"]["passed"] is True
     assert checks["meta.policy_manifest_present"]["passed"] is True
+
+
+def test_runtime_artifacts_fail_conformance_when_header_missing(tmp_path: Path):
+    run_root, task_dir = _generate_runtime_artifacts(tmp_path / "runtime_run")
+    canonical_path = task_dir / "traj.canonical.jsonl"
+    canonical_rows = []
+    for line in canonical_path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        payload = json.loads(line)
+        if payload.get("type") == "header":
+            continue
+        canonical_rows.append(payload)
+    canonical_path.write_text(
+        "".join(f"{json.dumps(row, ensure_ascii=False)}\n" for row in canonical_rows),
+        encoding="utf-8",
+    )
+
+    report = run_conformance_suite(str(run_root))
+    checks = _checks_by_name(report)
+    failed_checks = _failed_checks(report)
+
+    assert report["ok"] is False
+    assert checks["canonical.header_present"]["passed"] is False
+    assert checks["meta.policy_manifest_present"]["passed"] is True
+    assert failed_checks == {"canonical.header_present"}
+
+
+def test_runtime_artifacts_fail_conformance_when_policy_manifest_missing(tmp_path: Path):
+    run_root, task_dir = _generate_runtime_artifacts(tmp_path / "runtime_run")
+    meta_path = task_dir / "traj.meta.json"
+    meta_payload = json.loads(meta_path.read_text(encoding="utf-8"))
+    meta_payload.pop("policy_manifest", None)
+    meta_path.write_text(json.dumps(meta_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    report = run_conformance_suite(str(run_root))
+    checks = _checks_by_name(report)
+    failed_checks = _failed_checks(report)
+
+    assert report["ok"] is False
+    assert checks["canonical.header_present"]["passed"] is True
+    assert checks["meta.policy_manifest_present"]["passed"] is False
+    assert failed_checks == {"meta.policy_manifest_present"}
