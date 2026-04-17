@@ -341,6 +341,23 @@ class TrajLogger:
         with open(meta_path, "w", encoding="utf-8") as f:
             json.dump(meta, f, ensure_ascii=False, indent=4)
 
+    def log_policy_manifest(self, manifest: dict) -> None:
+        """Persist deterministic policy manifest to legacy and canonical artifacts."""
+        task_id = "0"
+        legacy_path = os.path.join(self.log_file_dir, self.log_file_name)
+        legacy = self._read_json_or_default(legacy_path, default={})
+        if task_id not in legacy:
+            legacy[task_id] = {"tools": self.tools, "traj": []}
+        legacy[task_id]["policy_manifest"] = manifest
+        with open(legacy_path, "w", encoding="utf-8") as f:
+            json.dump(legacy, f, ensure_ascii=False, indent=4)
+
+        _, meta_path = self._canonical_paths()
+        meta = self._read_json_or_default(meta_path, default={})
+        meta["policy_manifest"] = manifest
+        with open(meta_path, "w", encoding="utf-8") as f:
+            json.dump(meta, f, ensure_ascii=False, indent=4)
+
     def log_tool_error(self, *, step: int, error: dict) -> None:
         """Attach normalized tool error to the latest matching step record."""
         task_id = "0"
