@@ -15,7 +15,7 @@
 ### Tool Routing & Capability Policy
 
 - [x] **TOOL-01**: Runner dispatches GUI actions, MCP calls, and ask-user events via one unified tool router.
-- [x] **TOOL-02**: Task/tag/profile capability policy can enable/disable tool classes deterministically per run.
+- [ ] **TOOL-02**: Task/tag/profile capability policy can enable/disable tool classes deterministically per run.
 - [x] **TOOL-03**: MCP tool registration supports allowlist and timeout controls captured in run metadata.
 - [x] **TOOL-04**: Tool execution errors are normalized into comparable failure events across frameworks.
 
@@ -33,12 +33,12 @@
 - [x] **METR-03**: System records TTFA, TTS, step latency p50/p95, and tool latency p50/p95 for all frameworks.
 - [x] **METR-04**: System reports efficiency/cost metrics including tokens per success and cost per success.
 - [x] **METR-05**: System reports reliability metrics including tool success rate, tool retry rate, and invalid action rate.
-- [x] **METR-06**: System reports stability metrics including reproducibility variance across repeated fixed-config runs.
-- [x] **METR-07**: System reports evaluator quality metrics including deterministic evaluator vs LLM-judge agreement rate.
+- [ ] **METR-06**: System reports stability metrics including reproducibility variance across repeated fixed-config runs.
+- [ ] **METR-07**: System reports evaluator quality metrics including deterministic evaluator vs LLM-judge agreement rate.
 
 ### Trajectory & Artifacts
 
-- [x] **TRCE-01**: All runs persist a canonical versioned trajectory schema regardless of framework source.
+- [ ] **TRCE-01**: All runs persist a canonical versioned trajectory schema regardless of framework source.
 - [x] **TRCE-02**: Historical trajectory formats can be converted or wrapped into the canonical schema.
 - [x] **TRCE-03**: Aggregated reports can compare multiple frameworks on identical task subsets and settings.
 
@@ -46,14 +46,14 @@
 
 - [x] **INTG-01**: Nanobot/OpenGUI reference adapter can execute MobileWorld tasks end-to-end.
 - [x] **INTG-02**: OpenClaw and hermes adapter scaffolds are provided with implementation guide and examples.
-- [x] **INTG-03**: CLI can run eval by framework profile and emit comparable result artifacts.
+- [ ] **INTG-03**: CLI can run eval by framework profile and emit comparable result artifacts.
 - [x] **INTG-04**: CLI can list registered frameworks, supported capabilities, and conformance status.
 
 ### Compatibility & QA
 
 - [x] **COMP-01**: Existing built-in agent eval/test workflows remain functional without adapter migration.
-- [x] **COMP-02**: Conformance test suite validates adapter contract, tool routing, and evaluator output shape.
-- [x] **COMP-03**: Regression tests ensure benchmark reproducibility between repeated runs under same config.
+- [ ] **COMP-02**: Conformance test suite validates adapter contract, tool routing, and evaluator output shape.
+- [ ] **COMP-03**: Regression tests ensure benchmark reproducibility between repeated runs under same config.
 
 ## v2 Requirements
 
@@ -80,9 +80,9 @@
 | ADPT-02 | Phase 1 | Completed |
 | ADPT-03 | Phase 1 | Completed |
 | ADPT-04 | Phase 1 | Completed |
-| TRCE-01 | Phase 1 | Completed |
+| TRCE-01 | Phase 7 | Pending |
 | TOOL-01 | Phase 2 | Completed |
-| TOOL-02 | Phase 2 | Completed |
+| TOOL-02 | Phase 8 | Pending |
 | TOOL-03 | Phase 2 | Completed |
 | TOOL-04 | Phase 2 | Completed |
 | EVAL-01 | Phase 3 | Completed |
@@ -96,21 +96,23 @@
 | INTG-01 | Phase 4 | Complete |
 | COMP-01 | Phase 4 | Complete |
 | INTG-02 | Phase 5 | Complete |
-| INTG-03 | Phase 5 | Complete |
+| INTG-03 | Phase 8 | Pending |
 | INTG-04 | Phase 5 | Complete |
 | METR-04 | Phase 6 | Complete |
-| METR-06 | Phase 6 | Complete |
-| METR-07 | Phase 6 | Complete |
+| METR-06 | Phase 9 | Pending |
+| METR-07 | Phase 9 | Pending |
 | TRCE-02 | Phase 6 | Complete |
 | TRCE-03 | Phase 6 | Complete |
-| COMP-02 | Phase 6 | Complete |
-| COMP-03 | Phase 6 | Complete |
+| COMP-02 | Phase 7 | Pending |
+| COMP-03 | Phase 9 | Pending |
 
 **Coverage:**
 - v1 requirements: 29 total
+- Checked-off: 22
+- Pending rework from milestone gaps: 7
 - Mapped to phases: 29
 - Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-04-16*
-*Last updated: 2026-04-17 after Phase 6 reporting/conformance/reproducibility execution*
+*Last updated: 2026-04-17 after milestone gap-closure phases 7-9 were added*

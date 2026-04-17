@@ -17,6 +17,9 @@ This roadmap upgrades MobileWorld from built-in-agent evaluation to a protocol-d
 - [x] **Phase 4: Nanobot Reference Integration** - Validate architecture with nanobot/OpenGUI adapter (completed 2026-04-16)
 - [x] **Phase 5: Framework Expansion & CLI Profiles** - Add OpenClaw/hermes scaffolds and framework-oriented commands (completed 2026-04-17)
 - [x] **Phase 6: Reporting, Conformance & Reproducibility** - Finalize cross-framework comparison and QA guarantees (completed 2026-04-17)
+- [ ] **Phase 7: Conformance Artifact Contract Closure** - Align runtime artifact outputs with conformance validator expectations
+- [ ] **Phase 8: Framework Profile Policy Flow Repair** - Restore framework-profile capability policy correctness in adapter-mode runs
+- [ ] **Phase 9: Reproducibility Agreement Gate Hardening** - Make reproducibility pass criteria robust when judge agreement is unavailable
 
 ## Phase Details
 
@@ -135,10 +138,61 @@ Plans:
 - [x] 06-03: Build adapter conformance CLI and test suite (including metrics conformance)
 - [x] 06-04: Add reproducibility/judge-agreement workflow and thresholds
 
+### Phase 7: Conformance Artifact Contract Closure
+**Goal**: Close blocker-level artifact gaps so eval outputs satisfy conformance checks end-to-end.
+**Depends on**: Phase 6
+**Requirements**: COMP-02, TRCE-01
+**Gap Closure**: Closes audit requirement gaps COMP-02/TRCE-01 and flow gap `eval -> benchmark conformance`.
+**Success Criteria** (what must be TRUE):
+1. Canonical trajectory output includes the required header event expected by conformance checks.
+2. Canonical metadata persists policy manifest fields needed for artifact conformance validation.
+3. `mobile-world eval ...` followed by `mobile-world benchmark conformance --log-root ...` passes for representative runs.
+4. Regression tests cover conformance expectations for canonical header and metadata manifests.
+**Plans**: 3 plans
+
+Plans:
+- [ ] 07-01: Emit canonical header event in runtime trajectory output
+- [ ] 07-02: Persist policy manifest metadata for conformance checks
+- [ ] 07-03: Add conformance regression verifying eval-to-conformance compatibility
+
+### Phase 8: Framework Profile Policy Flow Repair
+**Goal**: Ensure framework-profile runs use deterministic profile-bound capability policy behavior.
+**Depends on**: Phase 7
+**Requirements**: TOOL-02, INTG-03
+**Gap Closure**: Closes audit requirement gap INTG-03, remaining TOOL-02 policy binding gap, and framework-profile flow break.
+**Success Criteria** (what must be TRUE):
+1. Adapter-mode policy resolution uses framework profile identity rather than built-in agent type.
+2. Policy manifest output matches selected framework profile semantics in artifacts.
+3. Framework-profile eval flow with profile-specific policy runs end-to-end without policy mismatch.
+4. Regression tests cover profile-bound capability decisions across adapter-mode paths.
+**Plans**: 3 plans
+
+Plans:
+- [ ] 08-01: Bind capability policy resolution to framework profile in runner path
+- [ ] 08-02: Validate policy manifest/profile alignment in produced artifacts
+- [ ] 08-03: Add framework-profile capability flow regression test
+
+### Phase 9: Reproducibility Agreement Gate Hardening
+**Goal**: Resolve reproducibility gate edge cases when judge agreement data is unavailable.
+**Depends on**: Phase 8
+**Requirements**: METR-06, METR-07, COMP-03
+**Gap Closure**: Closes medium-severity integration gap in reproducibility gate semantics.
+**Success Criteria** (what must be TRUE):
+1. Reproducibility reporting distinguishes stability variance pass from judge-agreement availability state.
+2. Runs without judge data can report deterministic stability status without false hard-failure.
+3. Judge-agreement thresholds remain enforced when judge data exists.
+4. Regression tests cover with-judge and without-judge reproducibility scenarios.
+**Plans**: 3 plans
+
+Plans:
+- [ ] 09-01: Refine reproducibility gate logic for missing judge agreement signal
+- [ ] 09-02: Add explicit reporting fields for agreement availability and threshold outcomes
+- [ ] 09-03: Add regression tests for judge-available and judge-unavailable runs
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 -> 2 -> 3 -> 3.1 -> 4 -> 5 -> 6
+Phases execute in numeric order: 1 -> 2 -> 3 -> 3.1 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -149,3 +203,6 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 3.1 -> 4 -> 5 -> 6
 | 4. Nanobot Reference Integration | 3/3 | Complete    | 2026-04-16 |
 | 5. Framework Expansion & CLI Profiles | 3/3 | Completed | 2026-04-17 |
 | 6. Reporting, Conformance & Reproducibility | 4/4 | Completed | 2026-04-17 |
+| 7. Conformance Artifact Contract Closure | 0/3 | Pending | - |
+| 8. Framework Profile Policy Flow Repair | 0/3 | Pending | - |
+| 9. Reproducibility Agreement Gate Hardening | 0/3 | Pending | - |
