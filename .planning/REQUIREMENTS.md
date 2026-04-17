@@ -15,7 +15,7 @@
 ### Tool Routing & Capability Policy
 
 - [x] **TOOL-01**: Runner dispatches GUI actions, MCP calls, and ask-user events via one unified tool router.
-- [ ] **TOOL-02**: Task/tag/profile capability policy can enable/disable tool classes deterministically per run.
+- [x] **TOOL-02**: Task/tag/profile capability policy can enable/disable tool classes deterministically per run.
 - [x] **TOOL-03**: MCP tool registration supports allowlist and timeout controls captured in run metadata.
 - [x] **TOOL-04**: Tool execution errors are normalized into comparable failure events across frameworks.
 
@@ -46,7 +46,7 @@
 
 - [x] **INTG-01**: Nanobot/OpenGUI reference adapter can execute MobileWorld tasks end-to-end.
 - [x] **INTG-02**: OpenClaw and hermes adapter scaffolds are provided with implementation guide and examples.
-- [ ] **INTG-03**: CLI can run eval by framework profile and emit comparable result artifacts.
+- [x] **INTG-03**: CLI can run eval by framework profile and emit comparable result artifacts.
 - [x] **INTG-04**: CLI can list registered frameworks, supported capabilities, and conformance status.
 
 ### Compatibility & QA
@@ -82,7 +82,7 @@
 | ADPT-04 | Phase 1 | Completed |
 | TRCE-01 | Phase 7 | Complete |
 | TOOL-01 | Phase 2 | Completed |
-| TOOL-02 | Phase 8 | Pending |
+| TOOL-02 | Phase 8 | Complete |
 | TOOL-03 | Phase 2 | Completed |
 | TOOL-04 | Phase 2 | Completed |
 | EVAL-01 | Phase 3 | Completed |
@@ -96,7 +96,7 @@
 | INTG-01 | Phase 4 | Complete |
 | COMP-01 | Phase 4 | Complete |
 | INTG-02 | Phase 5 | Complete |
-| INTG-03 | Phase 8 | Pending |
+| INTG-03 | Phase 8 | Complete |
 | INTG-04 | Phase 5 | Complete |
 | METR-04 | Phase 6 | Complete |
 | METR-06 | Phase 9 | Pending |

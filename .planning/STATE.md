@@ -3,40 +3,40 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: planned
-stopped_at: Planned Phase 08 (3 plans)
-last_updated: "2026-04-17T08:15:47.000Z"
+stopped_at: Completed Phase 08 execution
+last_updated: "2026-04-17T08:30:31.000Z"
 last_activity: 2026-04-17
 progress:
   total_phases: 10
-  completed_phases: 8
+  completed_phases: 9
   total_plans: 35
-  completed_plans: 29
-  percent: 83
+  completed_plans: 32
+  percent: 91
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-04-16)
+See: .planning/PROJECT.md (updated 2026-04-17)
 
 **Core value:** One benchmark, one task standard, one evaluator contract, multiple agent frameworks with reproducible and comparable results.
-**Current focus:** Phase 08 — framework-profile-policy-flow-repair
+**Current focus:** Phase 09 — reproducibility-agreement-gate-hardening
 
 ## Current Position
 
-Phase: 08 (framework-profile-policy-flow-repair) — PLANNED
+Phase: 09 (reproducibility-agreement-gate-hardening) — PENDING
 Plan: 0 of 3
-Status: Ready to execute
+Status: Ready to plan and execute
 Last activity: 2026-04-17
 
-Progress: [████████░░] 83%
+Progress: [█████████░] 91%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 29
+- Total plans completed: 32
 - Average duration: 0.5 hours/plan
 - Total execution time: 8.0 hours
 
@@ -54,13 +54,16 @@ Progress: [████████░░] 83%
 
 **Recent Trend:**
 
-- Last 5 plans: 06-03, 06-04, 07-01, 07-02, 07-03
+- Last 5 plans: 07-02, 07-03, 08-01, 08-02, 08-03
 - Trend: Positive
 
 *Updated after each plan completion*
 | Phase 07 P01 | 1 min | 2 tasks | 2 files |
 | Phase 07 P02 | 2 min | 3 tasks | 3 files |
 | Phase 07 P03 | 2 min | 3 tasks | 1 files |
+| Phase 08 P01 | 4 min | 1 task  | 1 file  |
+| Phase 08 P02 | 7 min | 3 tasks | 1 file  |
+| Phase 08 P03 | 8 min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -79,8 +82,9 @@ Recent decisions affecting current work:
 - [Phase 07]: Use one capability_manifest from CapabilityDecision.as_manifest() for tool and policy artifact writes.
 - [Phase 07]: Use runtime task execution via _execute_single_task and TrajLogger, not synthetic-only fixtures, for conformance assertions.
 - [Phase 07]: Assert exact failing check names for header and policy-manifest absence to lock deterministic blocker behavior.
-- [Phase 08 Planning]: Use `effective_policy_profile = framework_profile or agent_type` as the single runner policy identity source.
-- [Phase 08 Planning]: Add dedicated phase protocol regressions for resolver input identity and policy-manifest profile alignment.
+- [Phase 08]: Use `effective_policy_profile = framework_profile or agent_type` as the single runner policy identity source.
+- [Phase 08]: Verify policy-manifest profile alignment in both legacy and canonical artifacts.
+- [Phase 08]: Lock eval CLI framework-profile propagation semantics with deterministic regression coverage.
 
 ### Pending Todos
 
@@ -98,6 +102,6 @@ None currently.
 
 ## Session Continuity
 
-Last session: 2026-04-17T08:15:47.000Z
-Stopped at: Planned Phase 08 (3 plans)
+Last session: 2026-04-17T08:30:31.000Z
+Stopped at: Completed Phase 08 execution
 Resume file: None

@@ -17,8 +17,8 @@ This roadmap upgrades MobileWorld from built-in-agent evaluation to a protocol-d
 - [x] **Phase 4: Nanobot Reference Integration** - Validate architecture with nanobot/OpenGUI adapter (completed 2026-04-16)
 - [x] **Phase 5: Framework Expansion & CLI Profiles** - Add OpenClaw/hermes scaffolds and framework-oriented commands (completed 2026-04-17)
 - [x] **Phase 6: Reporting, Conformance & Reproducibility** - Finalize cross-framework comparison and QA guarantees (completed 2026-04-17)
-- [ ] **Phase 7: Conformance Artifact Contract Closure** - Align runtime artifact outputs with conformance validator expectations
-- [ ] **Phase 8: Framework Profile Policy Flow Repair** - Restore framework-profile capability policy correctness in adapter-mode runs
+- [x] **Phase 7: Conformance Artifact Contract Closure** - Align runtime artifact outputs with conformance validator expectations (completed 2026-04-17)
+- [x] **Phase 8: Framework Profile Policy Flow Repair** - Restore framework-profile capability policy correctness in adapter-mode runs (completed 2026-04-17)
 - [ ] **Phase 9: Reproducibility Agreement Gate Hardening** - Make reproducibility pass criteria robust when judge agreement is unavailable
 
 ## Phase Details
@@ -168,9 +168,9 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 08-01: Bind capability policy resolution to framework profile in runner path
-- [ ] 08-02: Validate policy manifest/profile alignment in produced artifacts
-- [ ] 08-03: Add framework-profile capability flow regression test
+- [x] 08-01: Bind capability policy resolution to framework profile in runner path
+- [x] 08-02: Validate policy manifest/profile alignment in produced artifacts
+- [x] 08-03: Add framework-profile capability flow regression test
 
 ### Phase 9: Reproducibility Agreement Gate Hardening
 **Goal**: Resolve reproducibility gate edge cases when judge agreement data is unavailable.
@@ -203,6 +203,6 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 3.1 -> 4 -> 5 -> 6 -> 7 -> 8 -> 
 | 4. Nanobot Reference Integration | 3/3 | Complete    | 2026-04-16 |
 | 5. Framework Expansion & CLI Profiles | 3/3 | Completed | 2026-04-17 |
 | 6. Reporting, Conformance & Reproducibility | 4/4 | Completed | 2026-04-17 |
-| 7. Conformance Artifact Contract Closure | 1/3 | In Progress|  |
-| 8. Framework Profile Policy Flow Repair | 0/3 | Pending | - |
+| 7. Conformance Artifact Contract Closure | 3/3 | Completed | 2026-04-17 |
+| 8. Framework Profile Policy Flow Repair | 3/3 | Completed | 2026-04-17 |
 | 9. Reproducibility Agreement Gate Hardening | 0/3 | Pending | - |
