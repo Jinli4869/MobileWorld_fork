@@ -1,9 +1,12 @@
 """Phase 8 framework-profile policy flow protocol tests."""
 
+import asyncio
 import json
 from pathlib import Path
 from queue import Queue
 
+from mobile_world.core.cli import create_parser
+from mobile_world.core.subcommands import eval as eval_subcommand
 from mobile_world.core import runner as runner_module
 from mobile_world.runtime.protocol.capability_policy import CapabilityDecision
 from mobile_world.runtime.utils.trajectory_logger import CANONICAL_META_FILE_NAME, LOG_FILE_NAME
@@ -122,3 +125,31 @@ def test_policy_manifest_profile_name_matches_effective_profile(monkeypatch, tmp
     assert framework_meta["policy_manifest"]["profile_name"] == "nanobot_opengui"
     assert builtin_legacy["0"]["policy_manifest"]["profile_name"] == "qwen3vl"
     assert builtin_meta["policy_manifest"]["profile_name"] == "qwen3vl"
+
+
+def test_eval_framework_profile_flow_preserves_profile_semantics(monkeypatch, tmp_path: Path):
+    captured_kwargs: dict = {}
+
+    def _fake_run_agent_with_evaluation(**kwargs):
+        captured_kwargs.update(kwargs)
+        return [], []
+
+    monkeypatch.setattr(eval_subcommand, "run_agent_with_evaluation", _fake_run_agent_with_evaluation)
+
+    parser = create_parser()
+    args = parser.parse_args(
+        [
+            "eval",
+            "--agent-type",
+            "qwen3vl",
+            "--framework-profile",
+            "nanobot_opengui",
+            "--output",
+            str(tmp_path / "logs"),
+        ]
+    )
+
+    asyncio.run(eval_subcommand.execute(args))
+
+    assert captured_kwargs["framework_profile"] == "nanobot_opengui"
+    assert captured_kwargs["agent_type"] == "qwen3vl"
