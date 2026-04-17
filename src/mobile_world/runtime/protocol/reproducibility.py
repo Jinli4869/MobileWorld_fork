@@ -81,7 +81,15 @@ def evaluate_reproducibility(
         if agreement_available and judge_agreement_rate is not None
         else None
     )
+    agreement_status = (
+        "passed"
+        if agreement_passed is True
+        else "failed"
+        if agreement_passed is False
+        else "unavailable"
+    )
     overall_ok = variance_ok and (agreement_passed if agreement_available else True)
+    overall_status = "passed" if overall_ok else "failed"
     return {
         "ok": overall_ok,
         "generated_at": datetime.now(UTC).isoformat(),
@@ -95,8 +103,22 @@ def evaluate_reproducibility(
         "evaluation_quality": {
             "judge_agreement_rate": judge_agreement_rate,
             "agreement_threshold": judge_agreement_threshold,
+            "agreement_available": agreement_available,
+            "agreement_status": agreement_status,
             "agreement_passed": agreement_passed,
             "judge_checks_total": judge_total,
+        },
+        "gate_summary": {
+            "stability_gate": {
+                "status": "passed" if variance_ok else "failed",
+                "passed": variance_ok,
+            },
+            "agreement_gate": {
+                "status": agreement_status,
+                "available": agreement_available,
+                "passed": agreement_passed,
+            },
+            "overall_status": overall_status,
         },
         "task_results": per_task,
     }
