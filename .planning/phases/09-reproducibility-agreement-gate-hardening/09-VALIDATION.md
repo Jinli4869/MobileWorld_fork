@@ -20,7 +20,7 @@ created: 2026-04-17
 | **Framework** | pytest |
 | **Config file** | `pyproject.toml` |
 | **Quick run command** | `UV_CACHE_DIR=/tmp/.uv-cache uv run --extra dev python -m pytest -q tests/protocol/test_phase9_reproducibility_agreement_gate.py tests/protocol/test_phase6_reporting_conformance_reproducibility.py` |
-| **Full suite command** | `UV_CACHE_DIR=/tmp/.uv-cache uv run --extra dev python -m pytest -q tests/protocol` |
+| **Full suite command** | `UV_CACHE_DIR=/tmp/.uv-cache uv run --extra dev python -m pytest -q tests/protocol/test_phase9_reproducibility_agreement_gate.py tests/protocol/test_phase6_reporting_conformance_reproducibility.py` |
 | **Estimated runtime** | ~150 seconds |
 
 ---

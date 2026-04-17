@@ -12,6 +12,13 @@ from mobile_world.runtime.utils.trajectory_logger import (
     SCORE_FILE_NAME,
 )
 
+# Canonical Phase 9 verification command used by plan and validation artifacts.
+PHASE9_COMBINED_REGRESSION_CMD = (
+    "UV_CACHE_DIR=/tmp/.uv-cache uv run --extra dev python -m pytest -q "
+    "tests/protocol/test_phase9_reproducibility_agreement_gate.py "
+    "tests/protocol/test_phase6_reporting_conformance_reproducibility.py"
+)
+
 
 def _write_json(path: Path, payload: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
