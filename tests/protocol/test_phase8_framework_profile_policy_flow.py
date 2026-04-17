@@ -11,6 +11,11 @@ from mobile_world.core import runner as runner_module
 from mobile_world.runtime.protocol.capability_policy import CapabilityDecision
 from mobile_world.runtime.utils.trajectory_logger import CANONICAL_META_FILE_NAME, LOG_FILE_NAME
 
+# Canonical Phase 8 verification command used by plan and validation artifacts.
+PHASE8_COMBINED_REGRESSION_CMD = (
+    "UV_CACHE_DIR=/tmp/.uv-cache uv run --extra dev python -m pytest -q tests/protocol/test_phase8_framework_profile_policy_flow.py tests/protocol/test_phase5_framework_profiles.py"
+)
+
 
 class DummyEnv:
     """Minimal env stub for _process_task_on_env tests."""

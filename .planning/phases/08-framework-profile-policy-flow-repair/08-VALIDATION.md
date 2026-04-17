@@ -20,7 +20,7 @@ created: 2026-04-17
 | **Framework** | pytest |
 | **Config file** | `pyproject.toml` |
 | **Quick run command** | `UV_CACHE_DIR=/tmp/.uv-cache uv run --extra dev python -m pytest -q tests/protocol/test_phase8_framework_profile_policy_flow.py` |
-| **Full suite command** | `UV_CACHE_DIR=/tmp/.uv-cache uv run --extra dev python -m pytest -q tests/protocol` |
+| **Full suite command** | `UV_CACHE_DIR=/tmp/.uv-cache uv run --extra dev python -m pytest -q tests/protocol/test_phase8_framework_profile_policy_flow.py tests/protocol/test_phase5_framework_profiles.py` |
 | **Estimated runtime** | ~120 seconds |
 
 ---
@@ -28,7 +28,7 @@ created: 2026-04-17
 ## Sampling Rate
 
 - **After every task commit:** Run `UV_CACHE_DIR=/tmp/.uv-cache uv run --extra dev python -m pytest -q tests/protocol/test_phase8_framework_profile_policy_flow.py`
-- **After every plan wave:** Run `UV_CACHE_DIR=/tmp/.uv-cache uv run --extra dev python -m pytest -q tests/protocol`
+- **After every plan wave:** Run `UV_CACHE_DIR=/tmp/.uv-cache uv run --extra dev python -m pytest -q tests/protocol/test_phase8_framework_profile_policy_flow.py tests/protocol/test_phase5_framework_profiles.py`
 - **Before `$gsd-verify-work`:** Full suite must be green
 - **Max feedback latency:** 120 seconds
 
