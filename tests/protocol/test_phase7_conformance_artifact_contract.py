@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
 
 from PIL import Image
 
+from mobile_world.core.cli import create_parser
+from mobile_world.core.subcommands.benchmark import execute as execute_benchmark
 from mobile_world.core.runner import _execute_single_task
 from mobile_world.runtime.protocol.adapter import (
     AdapterArtifactsResult,
@@ -160,3 +163,25 @@ def test_runtime_artifacts_fail_conformance_when_policy_manifest_missing(tmp_pat
     assert checks["canonical.header_present"]["passed"] is True
     assert checks["meta.policy_manifest_present"]["passed"] is False
     assert failed_checks == {"meta.policy_manifest_present"}
+
+
+def test_benchmark_conformance_cli_succeeds_for_runtime_artifacts(tmp_path: Path):
+    run_root, _ = _generate_runtime_artifacts(tmp_path / "runtime_run")
+    output_path = tmp_path / "conformance_report.json"
+
+    parser = create_parser()
+    args = parser.parse_args(
+        [
+            "benchmark",
+            "conformance",
+            "--log-root",
+            str(run_root),
+            "--output",
+            str(output_path),
+        ]
+    )
+    asyncio.run(execute_benchmark(args))
+
+    report = json.loads(output_path.read_text(encoding="utf-8"))
+    assert output_path.exists() is True
+    assert report["ok"] is True
