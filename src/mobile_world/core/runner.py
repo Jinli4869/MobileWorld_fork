@@ -35,6 +35,7 @@ from mobile_world.runtime.protocol.validation import ProtocolValidationError, ru
 from mobile_world.runtime.utils.docker import (
     discover_backends,
 )
+from mobile_world.runtime.utils.helpers import adb_execution_context
 from mobile_world.runtime.utils.models import ANSWER, UNKNOWN, JSONAction
 from mobile_world.runtime.utils.trajectory_logger import METRICS_FILE_NAME, TrajLogger
 
@@ -308,6 +309,7 @@ def _process_task_on_env(
     gui_claw_path: str | None = None,
     evaluation_mode: str | None = None,
     allow_adb_bypass: bool | None = None,
+    device: str = "emulator-5554",
     **kwargs,
 ) -> dict:
     """Process a single task on a specific environment.
@@ -415,6 +417,7 @@ def _process_task_on_env(
                     gui_claw_path=gui_claw_path,
                     evaluation_mode=evaluation_mode,
                     allow_adb_bypass=allow_adb_bypass,
+                    device=device,
                     **kwargs,
                 )
                 framework_options = {
@@ -423,36 +426,40 @@ def _process_task_on_env(
                     "gui_claw_path": gui_claw_path,
                     "evaluation_mode": evaluation_mode,
                     "allow_adb_bypass": allow_adb_bypass,
+                    "mobileworld_container_name": container_name,
+                    "mobileworld_device": device,
+                    "mobileworld_env_url": env.base_url,
                 }
             else:
                 agent = create_agent(agent_type, model_name, llm_base_url, api_key, env=env, **kwargs)
 
             task_start_time = time.time()
-            while True:
-                try:
-                    task_steps, task_score = _execute_single_task(
-                        env,
-                        agent,
-                        task_name,
-                        max_step,
-                        traj_logger=traj_logger,
-                        tool_router=tool_router,
-                        enable_mcp=enable_mcp,
-                        evaluator=evaluator,
-                        framework_adapter=framework_adapter,
-                        framework_options=framework_options,
-                    )
-                    break
-                except Exception as e:
-                    if "Device is not healthy" in str(e) and retry_on_device_unhealthy > 0:
-                        logger.warning("Device is not healthy, retrying...")
-                        time.sleep(20)
-                        retry_on_device_unhealthy -= 1
-                        traj_logger.reset_traj()
-                        continue
-                    else:
-                        logger.exception(f"Error executing task {task_name}")
-                        return None
+            with adb_execution_context(container_name=container_name, device=device):
+                while True:
+                    try:
+                        task_steps, task_score = _execute_single_task(
+                            env,
+                            agent,
+                            task_name,
+                            max_step,
+                            traj_logger=traj_logger,
+                            tool_router=tool_router,
+                            enable_mcp=enable_mcp,
+                            evaluator=evaluator,
+                            framework_adapter=framework_adapter,
+                            framework_options=framework_options,
+                        )
+                        break
+                    except Exception as e:
+                        if "Device is not healthy" in str(e) and retry_on_device_unhealthy > 0:
+                            logger.warning("Device is not healthy, retrying...")
+                            time.sleep(20)
+                            retry_on_device_unhealthy -= 1
+                            traj_logger.reset_traj()
+                            continue
+                        else:
+                            logger.exception(f"Error executing task {task_name}")
+                            return None
 
             task_duration = time.time() - task_start_time
             task_success = task_score > 0.0

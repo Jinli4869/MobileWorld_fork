@@ -1,7 +1,10 @@
 import copy
 import json
 import os
+import shlex
 import subprocess
+import threading
+from contextlib import contextmanager
 from datetime import datetime, timedelta
 
 from loguru import logger
@@ -36,6 +39,65 @@ class AdbResponse(BaseModel):
     def __ne__(self, other: object) -> bool:
         """Support != comparison."""
         return not self.__eq__(other)
+
+
+_ADB_EXEC_CONTEXT = threading.local()
+
+
+@contextmanager
+def adb_execution_context(
+    *,
+    container_name: str | None = None,
+    device: str | None = None,
+):
+    """Bind ADB execution context for the current thread."""
+    prev_container = getattr(_ADB_EXEC_CONTEXT, "container_name", None)
+    prev_device = getattr(_ADB_EXEC_CONTEXT, "device", None)
+    _ADB_EXEC_CONTEXT.container_name = container_name
+    _ADB_EXEC_CONTEXT.device = device
+    try:
+        yield
+    finally:
+        _ADB_EXEC_CONTEXT.container_name = prev_container
+        _ADB_EXEC_CONTEXT.device = prev_device
+
+
+def _current_adb_context() -> tuple[str | None, str | None]:
+    container_name = getattr(_ADB_EXEC_CONTEXT, "container_name", None)
+    device = getattr(_ADB_EXEC_CONTEXT, "device", None)
+
+    if not container_name:
+        container_name = os.getenv("MOBILE_WORLD_ADB_CONTAINER")
+    if not device:
+        device = os.getenv("MOBILE_WORLD_ADB_DEVICE")
+    return container_name, device
+
+
+def _resolve_adb_command(adb_command: str) -> str:
+    container_name, device = _current_adb_context()
+    if not container_name:
+        return adb_command
+
+    stripped = adb_command.strip()
+    if not stripped.startswith("adb "):
+        return adb_command
+
+    suffix = stripped[len("adb ") :]
+    try:
+        suffix_parts = shlex.split(suffix)
+    except ValueError:
+        return (
+            f"docker exec {shlex.quote(container_name)} {suffix}"
+            if not device
+            else f"docker exec {shlex.quote(container_name)} adb -s {shlex.quote(device)} {suffix}"
+        )
+
+    has_serial = "-s" in suffix_parts
+    command_parts: list[str] = ["docker", "exec", container_name, "adb"]
+    if device and not has_serial:
+        command_parts.extend(["-s", device])
+    command_parts.extend(suffix_parts)
+    return " ".join(shlex.quote(part) for part in command_parts)
 
 
 def time_within_ten_secs(time1: str | AdbResponse, time2: str | AdbResponse):
@@ -101,11 +163,14 @@ def pretty_print_messages(messages: list[dict], max_messages: int = 2) -> None:
 def execute_adb(adb_command: str, output: bool = True, root_required=False) -> AdbResponse:
     if not adb_command.startswith("adb "):
         adb_command = "adb " + adb_command
+    adb_command = _resolve_adb_command(adb_command)
     env = os.environ.copy()
 
     if root_required:
+        whoami_cmd = _resolve_adb_command("adb shell whoami")
+        adb_root_cmd = _resolve_adb_command("adb root")
         whoami_check = subprocess.run(
-            "adb shell whoami",
+            whoami_cmd,
             shell=True,
             capture_output=True,
             text=True,
@@ -113,7 +178,7 @@ def execute_adb(adb_command: str, output: bool = True, root_required=False) -> A
         )
         if whoami_check.returncode == 0 and whoami_check.stdout.strip() != "root":
             root_attempt = subprocess.run(
-                "adb root",
+                adb_root_cmd,
                 shell=True,
                 capture_output=True,
                 text=True,
@@ -131,7 +196,7 @@ def execute_adb(adb_command: str, output: bool = True, root_required=False) -> A
                 )
 
             verify_check = subprocess.run(
-                "adb shell whoami",
+                whoami_cmd,
                 shell=True,
                 capture_output=True,
                 text=True,

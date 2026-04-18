@@ -5,7 +5,10 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import shlex
 import sys
+import time
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
@@ -86,6 +89,121 @@ def _json_loads_maybe(text: Any) -> dict[str, Any] | None:
     return None
 
 
+def _infer_provider_name(model_name: str | None, llm_base_url: str | None) -> str:
+    model = (model_name or "").strip().lower()
+    base = (llm_base_url or "").strip().lower()
+
+    if "dashscope" in base or "aliyuncs.com" in base:
+        return "dashscope"
+    if "openrouter" in base:
+        return "openrouter"
+    if "api.openai.com" in base:
+        return "openai"
+    if "qwen" in model:
+        return "dashscope"
+    if model.startswith("gpt"):
+        return "openai"
+    return "custom"
+
+
+def _resolve_runtime_api_key(provider_name: str, explicit_api_key: str | None) -> str | None:
+    if explicit_api_key:
+        return explicit_api_key
+
+    if provider_name == "dashscope":
+        return os.getenv("DASHSCOPE_API_KEY") or os.getenv("API_KEY")
+    if provider_name == "openai":
+        return os.getenv("OPENAI_API_KEY") or os.getenv("API_KEY")
+    if provider_name == "openrouter":
+        return os.getenv("OPENROUTER_API_KEY") or os.getenv("API_KEY")
+    if provider_name == "custom":
+        return os.getenv("API_KEY")
+    return (
+        os.getenv("API_KEY")
+        or os.getenv("DASHSCOPE_API_KEY")
+        or os.getenv("OPENAI_API_KEY")
+        or os.getenv("OPENROUTER_API_KEY")
+    )
+
+
+def _build_mw_adb_wrapper(
+    *,
+    output_dir: str,
+    run_id: str,
+    container_name: str,
+    device: str | None,
+) -> tuple[Path, Path, Path, Path]:
+    runtime_root = Path(output_dir).expanduser() / ".nanobot_runtime" / run_id
+    bin_dir = runtime_root / "bin"
+    bin_dir.mkdir(parents=True, exist_ok=True)
+    wrapper_path = bin_dir / "mw_adb"
+    adb_wrapper_path = bin_dir / "adb"
+    call_log_path = runtime_root / "adb_wrapper_calls.log"
+    call_log_path.touch(exist_ok=True)
+
+    forward = f"docker exec {shlex.quote(container_name)} adb"
+    if device:
+        forward += f" -s {shlex.quote(device)}"
+    container_literal = shlex.quote(container_name)
+    serial_literal = shlex.quote(device) if device else "''"
+    call_log_literal = shlex.quote(str(call_log_path))
+
+    wrapper_path.write_text(
+        "#!/usr/bin/env bash\n"
+        "set -euo pipefail\n"
+        f"printf '%s\\t%s\\n' 'mw_adb' \"$*\" >> {call_log_literal}\n"
+        f'exec {forward} "$@"\n',
+        encoding="utf-8",
+    )
+    wrapper_path.chmod(0o755)
+    adb_wrapper_path.write_text(
+        "#!/usr/bin/env bash\n"
+        "set -euo pipefail\n"
+        f"printf '%s\\t%s\\n' 'adb' \"$*\" >> {call_log_literal}\n"
+        f"CONTAINER={container_literal}\n"
+        f"DEFAULT_SERIAL={serial_literal}\n"
+        "SERIAL_ARGS=()\n"
+        "ARGS=(\"$@\")\n"
+        "if [[ ${#ARGS[@]} -ge 2 && \"${ARGS[0]}\" == \"-s\" ]]; then\n"
+        "  SERIAL_ARGS=(\"${ARGS[0]}\" \"${ARGS[1]}\")\n"
+        "  ARGS=(\"${ARGS[@]:2}\")\n"
+        "elif [[ -n \"$DEFAULT_SERIAL\" ]]; then\n"
+        "  SERIAL_ARGS=(\"-s\" \"$DEFAULT_SERIAL\")\n"
+        "fi\n"
+        "if [[ ${#ARGS[@]} -eq 0 ]]; then\n"
+        "  exec docker exec \"$CONTAINER\" adb \"${SERIAL_ARGS[@]}\"\n"
+        "fi\n"
+        "CMD=\"${ARGS[0]}\"\n"
+        "if [[ \"$CMD\" == \"pull\" && ${#ARGS[@]} -ge 3 ]]; then\n"
+        "  SRC=\"${ARGS[1]}\"\n"
+        "  DST=\"${ARGS[2]}\"\n"
+        "  TMP=\"/tmp/mw_adb_pull_$(date +%s%N)_$$\"\n"
+        "  docker exec \"$CONTAINER\" adb \"${SERIAL_ARGS[@]}\" pull \"$SRC\" \"$TMP\" >/dev/null\n"
+        "  if [[ \"$DST\" == */ ]]; then\n"
+        "    mkdir -p \"$DST\"\n"
+        "  else\n"
+        "    mkdir -p \"$(dirname \"$DST\")\"\n"
+        "  fi\n"
+        "  docker cp \"$CONTAINER:$TMP\" \"$DST\" >/dev/null\n"
+        "  docker exec \"$CONTAINER\" rm -f \"$TMP\" >/dev/null 2>&1 || true\n"
+        "  exit 0\n"
+        "fi\n"
+        "if [[ \"$CMD\" == \"push\" && ${#ARGS[@]} -ge 3 ]]; then\n"
+        "  SRC=\"${ARGS[1]}\"\n"
+        "  DST=\"${ARGS[2]}\"\n"
+        "  TMP=\"/tmp/mw_adb_push_$(date +%s%N)_$$\"\n"
+        "  docker cp \"$SRC\" \"$CONTAINER:$TMP\" >/dev/null\n"
+        "  docker exec \"$CONTAINER\" adb \"${SERIAL_ARGS[@]}\" push \"$TMP\" \"$DST\"\n"
+        "  docker exec \"$CONTAINER\" rm -f \"$TMP\" >/dev/null 2>&1 || true\n"
+        "  exit 0\n"
+        "fi\n"
+        "exec docker exec \"$CONTAINER\" adb \"${SERIAL_ARGS[@]}\" \"${ARGS[@]}\"\n",
+        encoding="utf-8",
+    )
+    adb_wrapper_path.chmod(0o755)
+    return bin_dir, wrapper_path, adb_wrapper_path, call_log_path
+
+
 @contextmanager
 def _temporary_sys_path(path: Path):
     path_str = str(path)
@@ -101,6 +219,25 @@ def _temporary_sys_path(path: Path):
             sys.path.remove(path_str)
         except ValueError:
             pass
+
+
+@contextmanager
+def _temporary_environ(updates: dict[str, str | None]):
+    previous: dict[str, str | None] = {}
+    try:
+        for key, value in updates.items():
+            previous[key] = os.environ.get(key)
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+        yield
+    finally:
+        for key, value in previous.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
 
 
 class NanobotOpenGUIAdapter(FrameworkAdapter):
@@ -208,6 +345,10 @@ class NanobotOpenGUIAdapter(FrameworkAdapter):
             "evaluation_mode": runtime_mode,
             "allow_adb_bypass": runtime_allow_adb_bypass,
             "nanobot_fork_path": str(self.nanobot_root),
+            "mobileworld_container_name": options.get("mobileworld_container_name"),
+            "mobileworld_device": options.get("mobileworld_device"),
+            "mobileworld_env_url": options.get("mobileworld_env_url"),
+            "session_nonce": int(time.time() * 1000),
         }
 
         return AdapterInitializeResult(
@@ -225,15 +366,16 @@ class NanobotOpenGUIAdapter(FrameworkAdapter):
 
     def _run_coro_sync(self, coro):
         try:
+            asyncio.get_running_loop()
+        except RuntimeError:
             return asyncio.run(coro)
-        except RuntimeError as exc:
-            if "asyncio.run() cannot be called from a running event loop" not in str(exc):
-                raise
-            loop = asyncio.new_event_loop()
-            try:
-                return loop.run_until_complete(coro)
-            finally:
-                loop.close()
+
+        def _worker() -> Any:
+            # Run the coroutine in a fresh thread to avoid nested loop conflicts.
+            return asyncio.run(coro)
+
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            return executor.submit(_worker).result()
 
     async def _execute_with_nanobot_loop(
         self,
@@ -256,12 +398,62 @@ class NanobotOpenGUIAdapter(FrameworkAdapter):
             set_config_path(config_path)
             config = load_config(config_path)
             config.agents.defaults.workspace = self._state["gui_claw_path"]
+            if self.model_name:
+                config.agents.defaults.model = self.model_name
+
+            provider_name = config.agents.defaults.provider
+            if provider_name == "auto":
+                provider_name = _infer_provider_name(self.model_name, self.llm_base_url)
+                config.agents.defaults.provider = provider_name
+
+            provider_cfg = getattr(config.providers, provider_name, None)
+            if provider_cfg is None:
+                provider_name = "custom"
+                config.agents.defaults.provider = provider_name
+                provider_cfg = config.providers.custom
+
+            runtime_api_key = _resolve_runtime_api_key(provider_name, self.api_key)
+            if runtime_api_key and not provider_cfg.api_key:
+                provider_cfg.api_key = runtime_api_key
+            if self.llm_base_url and not provider_cfg.api_base:
+                provider_cfg.api_base = self.llm_base_url
+
+            mw_adb_wrapper: Path | None = None
+            adb_wrapper: Path | None = None
+            bin_dir: Path | None = None
+            adb_call_log_path: Path | None = None
+            container_name = self._state.get("mobileworld_container_name")
+            device = self._state.get("mobileworld_device")
+            if isinstance(container_name, str) and container_name.strip():
+                bin_dir, mw_adb_wrapper, adb_wrapper, adb_call_log_path = _build_mw_adb_wrapper(
+                    output_dir=str(self._state.get("output_dir", ".")),
+                    run_id=run_id,
+                    container_name=container_name.strip(),
+                    device=str(device).strip() if isinstance(device, str) and device.strip() else None,
+                )
+                existing_path_append = config.tools.exec.path_append.strip()
+                config.tools.exec.path_append = (
+                    str(bin_dir)
+                    if not existing_path_append
+                    else f"{existing_path_append}{os.pathsep}{bin_dir}"
+                )
 
             if config.gui is None:
                 raise RuntimeError("nanobot_gui_config_missing")
+            if adb_wrapper is not None:
+                adb_cfg = getattr(config.gui, "adb", None)
+                if adb_cfg is not None:
+                    if hasattr(adb_cfg, "adb_path"):
+                        adb_cfg.adb_path = str(adb_wrapper)
+                    if isinstance(device, str) and device.strip() and hasattr(adb_cfg, "serial"):
+                        adb_cfg.serial = device.strip()
 
             bus = MessageBus()
-            provider = _make_provider(config, model_override=self.model_name or None)
+            provider = _make_provider(
+                config,
+                model_override=self.model_name or None,
+                provider_override=provider_name,
+            )
             gui_provider, gui_model = _resolve_gui_runtime(config)
             cron_store_path = config.workspace_path / "cron" / "jobs.json"
             cron = CronService(cron_store_path)
@@ -285,35 +477,66 @@ class NanobotOpenGUIAdapter(FrameworkAdapter):
                 gui_model=gui_model,
             )
 
-            session_key = f"mobile_world:{run_id}"
+            session_key = f"mobile_world:{run_id}:{self._state.get('session_nonce')}"
             instruction = (
                 "You are running inside MobileWorld benchmark evaluation. "
                 "Complete the target task on the connected Android device. "
                 "Use gui_task/ADB/deeplink tooling when needed. "
+                "When using shell commands for device control, do NOT use plain `adb`. "
+                "Use `mw_adb` so commands run inside the MobileWorld container. "
                 "Return a concise completion summary at the end.\n\n"
                 f"Task Name: {task_name}\n"
                 f"Task Goal: {task_goal}"
             )
+            if mw_adb_wrapper is not None:
+                instruction += (
+                    "\n"
+                    f"Device shell wrapper: {mw_adb_wrapper} (call as `mw_adb ...`)."
+                )
 
             response = None
-            try:
-                response = await agent_loop.process_direct(
-                    instruction,
-                    session_key=session_key,
-                    channel="cli",
-                    chat_id="direct",
+            messages: list[dict[str, Any]] = []
+            env_updates: dict[str, str | None] = {}
+            if bin_dir is not None:
+                current_path = os.environ.get("PATH", "")
+                env_updates["PATH"] = (
+                    f"{bin_dir}{os.pathsep}{current_path}" if current_path else str(bin_dir)
                 )
-                session = agent_loop.sessions.get_or_create(session_key)
-                messages = list(session.messages)
+            if isinstance(device, str) and device.strip():
+                env_updates["ANDROID_SERIAL"] = device.strip()
+            try:
+                with _temporary_environ(env_updates):
+                    response = await agent_loop.process_direct(
+                        instruction,
+                        session_key=session_key,
+                        channel="cli",
+                        chat_id="direct",
+                    )
+                    session = agent_loop.sessions.get_or_create(session_key)
+                    messages = list(session.messages)
             finally:
                 await agent_loop.close_mcp()
                 agent_loop.stop()
+
+        wrapper_mw_adb_calls = 0
+        wrapper_adb_calls = 0
+        if adb_call_log_path is not None and adb_call_log_path.exists():
+            try:
+                for line in adb_call_log_path.read_text(encoding="utf-8").splitlines():
+                    if line.startswith("mw_adb\t"):
+                        wrapper_mw_adb_calls += 1
+                    elif line.startswith("adb\t"):
+                        wrapper_adb_calls += 1
+            except Exception:
+                logger.exception("failed_to_read_adb_wrapper_call_log")
 
         return {
             "success": True,
             "summary": response.content if response is not None else "",
             "messages": messages,
             "default_gui_backend": getattr(config.gui, "backend", None),
+            "wrapper_mw_adb_calls": wrapper_mw_adb_calls,
+            "wrapper_adb_calls": wrapper_adb_calls,
         }
 
     @staticmethod
@@ -354,6 +577,13 @@ class NanobotOpenGUIAdapter(FrameworkAdapter):
                         gui_task_calls += 1
                         backend = str(args.get("backend") or default_gui_backend or "").lower()
                         if backend == "adb":
+                            adb_calls += 1
+                    elif normalized_name in {"exec", "exec_shell", "tool.exec_shell"}:
+                        command = str(args.get("command") or "").strip().lower()
+                        command_padded = f" {command} "
+                        if "mw_adb" in command:
+                            adb_calls += 1
+                        elif " adb " in command_padded or command.startswith("adb ") or "/adb " in command_padded:
                             adb_calls += 1
                     elif "deeplink" in normalized_name:
                         deeplink_calls += 1
@@ -396,13 +626,22 @@ class NanobotOpenGUIAdapter(FrameworkAdapter):
             raw_result.get("messages", []),
             default_gui_backend=raw_result.get("default_gui_backend"),
         )
+        wrapper_mw_adb_calls = _coerce_int(raw_result.get("wrapper_mw_adb_calls"))
+        wrapper_adb_calls = _coerce_int(raw_result.get("wrapper_adb_calls"))
+        merged_adb_calls = max(
+            _coerce_int(lane_stats.get("adb_calls")),
+            wrapper_mw_adb_calls + wrapper_adb_calls,
+        )
+        merged_gui_task_calls = _coerce_int(lane_stats.get("gui_task_calls"))
+        if merged_gui_task_calls == 0 and wrapper_adb_calls > 0:
+            merged_gui_task_calls = 1
         return {
             "execution_mode": "mixed",
             "success": bool(raw_result.get("success", False)),
             "summary": str(raw_result.get("summary") or ""),
             "error": raw_result.get("error"),
-            "adb_calls": _coerce_int(lane_stats.get("adb_calls")),
-            "gui_task_calls": _coerce_int(lane_stats.get("gui_task_calls")),
+            "adb_calls": merged_adb_calls,
+            "gui_task_calls": merged_gui_task_calls,
             "deeplink_calls": _coerce_int(lane_stats.get("deeplink_calls")),
             "gui_steps": _coerce_int(lane_stats.get("gui_steps")),
             "trace_refs": lane_stats.get("trace_refs") or [],
