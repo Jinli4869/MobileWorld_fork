@@ -238,7 +238,7 @@ def test_convert_legacy_trajectory_to_canonical(tmp_path: Path):
     assert any(row["type"] == "metrics" for row in rows)
 
 
-def test_aggregate_framework_runs_builds_kpi_panels(tmp_path: Path):
+def test_aggregate_framework_runs_builds_native_leaderboard(tmp_path: Path):
     run_a = tmp_path / "nanobot_run"
     run_b = tmp_path / "openclaw_run"
     _task_artifact_bundle(
@@ -293,9 +293,9 @@ def test_aggregate_framework_runs_builds_kpi_panels(tmp_path: Path):
 
     assert report["common_tasks"] == ["task_alpha", "task_beta"]
     assert report["leaderboard"][0]["framework"] == "openclaw"
-    efficiency = {row["framework"]: row for row in report["kpi_panels"]["efficiency"]}
-    assert efficiency["nanobot"]["tokens_per_success"] == 100.0
-    assert efficiency["openclaw"]["tokens_per_success"] == 100.0
+    assert "kpi_panels" not in report
+    assert report["leaderboard"][0]["success_rate"] == 1.0
+    assert report["leaderboard"][0]["avg_score"] == 1.0
 
 
 def test_aggregate_framework_runs_supports_leaderboards_by_mode(tmp_path: Path):
@@ -379,11 +379,10 @@ def test_aggregate_framework_runs_supports_leaderboards_by_mode(tmp_path: Path):
     assert report["framework_modes"]["openclaw"]["evaluation_mode"] == "standard"
     assert report["leaderboards"]["mixed"][0]["framework"] == "nanobot"
     assert report["leaderboards"]["standard"][0]["framework"] == "openclaw"
-    assert "lane_metrics" in report["leaderboards"]["mixed"][0]
-    assert report["leaderboards"]["mixed"][0]["lane_metrics"]["adb_calls"] == 6
+    assert "lane_metrics" not in report["leaderboards"]["mixed"][0]
     assert report["leaderboard"][0]["framework"] == "openclaw"
     assert any(
-        "mixed leaderboard allows ADB/deeplink/gui_task bypass lanes" in note
+        "mixed and standard leaderboards are reported separately" in note
         for note in report["comparability_notes"]
     )
 

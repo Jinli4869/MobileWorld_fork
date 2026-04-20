@@ -1,112 +1,134 @@
-<!-- GSD:project-start source:PROJECT.md -->
-## Project
+# AGENTS.md
 
-**MobileWorld Multi-Framework Evaluation Upgrade**
+## Project Purpose
 
-This project upgrades the existing MobileWorld benchmark from a built-in-agent evaluation stack into a framework-agnostic evaluation platform. The goal is to evaluate OpenClaw/nanobot/hermes-style agents under one task/runtime/evaluator standard while preserving MobileWorld's deterministic Android benchmark strengths. The target users are researchers and engineers who need fair, reproducible cross-framework agent evaluation with GUI actions, MCP tools, and evaluator calls.
+This repository extends MobileWorld with a practical integration path for evaluating `nanobot_fork` under MobileWorld task/runtime/evaluator constraints.
 
-**Core Value:** One benchmark, one task standard, one evaluator contract, multiple agent frameworks with reproducible and comparable results.
+Primary goal for current work:
+- Keep MobileWorld native evaluation semantics intact.
+- Run nanobot integration evaluations reliably.
+- Avoid unnecessary adapter/template abstraction that does not contribute to runnable evaluation.
 
-### Constraints
+## Current Integration Scope
 
-- **Compatibility**: Existing CLI paths and built-in agents must continue to run — avoid breaking current users.
-- **Determinism**: Task init/eval semantics must stay reproducible across frameworks — benchmark comparability depends on this.
-- **Runtime boundary**: Keep task/server/runtime ownership inside MobileWorld; external frameworks integrate through adapters, not by bypassing server contracts.
-- **MCP safety**: Tool registration and invocation must support allowlisting/timeouts and fail-safe behavior.
-- **Evaluator integrity**: Cross-framework comparisons require normalized trajectory artifacts and stable scoring policy.
-- **Tech stack**: Python 3.12 project with existing FastAPI + uv runtime and Android emulator workflow.
-<!-- GSD:project-end -->
+Active and supported integration profile:
+- `nanobot_opengui`
 
-<!-- GSD:stack-start source:research/STACK.md -->
-## Technology Stack
+Not in active scope:
+- scaffold/template adapters for other frameworks (do not reintroduce placeholder profiles unless they can run real evaluation).
 
-## Recommended Stack
-### Core Technologies
-| Technology | Version | Purpose | Why Recommended |
-|------------|---------|---------|-----------------|
-| Python | 3.12 | Primary runtime for benchmark core | Already the current MobileWorld runtime and task ecosystem |
-| FastAPI + Uvicorn | FastAPI 0.104+, Uvicorn 0.24+ | Stable benchmark server APIs | Existing production path in MobileWorld; minimal migration risk |
-| Pydantic v2 | 2.x | Contract-first schema for actions/tools/evaluation events | Ideal for strict protocol boundaries and adapter validation |
-| OpenAI-compatible client abstraction | OpenAI SDK 1.x + provider wrappers | Unified model/evaluator invocation | Current agent/evaluator paths already rely on this shape |
-### Supporting Libraries
-| Library | Version | Purpose | When to Use |
-|---------|---------|---------|-------------|
-| `mcp` + `fastmcp` | `mcp>=1.9.4`, `fastmcp>=2.9.2` | MCP server/client and tool schema bridge | Dynamic MCP tool registration and call routing |
-| `httpx`/`requests` | existing | Adapter transport and benchmark API calls | Framework adapters and evaluator connectors |
-| `joblib` | existing | Parallel task execution | Controlled multi-env benchmark runs |
-| `jsonlines` | existing | Unified trajectory artifact storage | Cross-framework trace normalization |
-| `rich` | existing | CLI reporting and summary visualization | Consistent eval/leaderboard output |
-### Development Tools
-| Tool | Purpose | Notes |
-|------|---------|-------|
-| `pytest` | Contract/integration regression tests | Must add adapter contract tests and evaluator equivalence tests |
-| `ruff` + `mypy` | Static quality gates | Keep protocol boundaries explicit and typed |
-| Docker + AVD snapshots | Deterministic benchmark env | Preserve existing MobileWorld reproducibility foundation |
-## Alternatives Considered
-| Recommended | Alternative | When to Use Alternative |
-|-------------|-------------|-------------------------|
-| Protocol adapter layer inside MobileWorld | Separate adapter gateway service | Use separate service only if cross-language framework support becomes dominant |
-| Unified Pydantic contracts | Ad-hoc dict passing | Never for benchmark-critical interfaces due to silent mismatch risk |
-| Server-owned evaluator contracts | Framework-owned evaluator logic | Use framework-owned logic only for exploratory metrics, not leaderboard metrics |
-## What NOT to Use
-| Avoid | Why | Use Instead |
-|-------|-----|-------------|
-| Hard-coded MCP server list only | Blocks framework portability and custom tool ecosystems | Config-driven MCP registry with allowlist and timeout control |
-| Framework-specific trajectory formats | Breaks cross-framework comparability | Canonical MobileWorld trajectory schema + adapter converters |
-| Direct framework bypass of MobileWorld task APIs | Undermines determinism and fairness | Adapter calling standard task lifecycle APIs |
-## Stack Patterns by Variant
-- Use in-process adapter modules with protocol interfaces
-- Because lower latency, easier debugging, and less infra complexity
-- Use thin RPC adapter boundary with same contracts
-- Because contract remains stable while runtime language can differ
-## Version Compatibility
-| Package A | Compatible With | Notes |
-|-----------|-----------------|-------|
-| `openai>=1.106.1` | OpenAI-compatible providers | Use wrapper to handle provider-specific tool-call differences |
-| `mcp>=1.9.4` | HTTP/SSE/stdio MCP servers | Normalize schema and timeout behavior in adapter layer |
-| `pydantic>=2` | FastAPI server models | Reuse for adapter/evaluator contracts to reduce model drift |
-## Sources
-- MobileWorld codebase (`src/mobile_world/runtime`, `src/mobile_world/core`, `src/mobile_world/agents`) — current benchmark runtime and contracts
-- MobileWorld docs (`README.md`, `docs/mcp_setup.md`) — current CLI and MCP operational model
-- nanobot/OpenGUI codebase (`nanobot/agent/tools/mcp.py`, `opengui/interfaces.py`, `opengui/evaluation.py`) — adapter and evaluator reference patterns
-<!-- GSD:stack-end -->
+Key integration files:
+- Adapter implementation: `src/mobile_world/runtime/adapters/nanobot_opengui.py`
+- Adapter registration: `src/mobile_world/agents/registry.py`
+- Eval CLI and framework config handling: `src/mobile_world/core/subcommands/eval.py`
+- Runtime execution path: `src/mobile_world/core/runner.py`
+- Cross-run reporting utilities: `src/mobile_world/runtime/protocol/reporting.py`
+- Benchmark utilities: `src/mobile_world/core/subcommands/benchmark.py`
 
-<!-- GSD:conventions-start source:CONVENTIONS.md -->
-## Conventions
+## Evaluation Config (Where to Set It)
 
-Conventions not yet established. Will populate as patterns emerge during development.
-<!-- GSD:conventions-end -->
+Main integration config file in this repo:
+- `/home/jinli/Project/MobileWorld_fork/configs/framework.nanobot_opengui.mixed.json`
 
-<!-- GSD:architecture-start source:ARCHITECTURE.md -->
-## Architecture
+This JSON is the source of truth for framework-side integration switches, including:
+- `framework_profile`
+- `nanobot_fork_path`
+- `nanobot_config_path`
+- `gui_claw_path`
+- `evaluation_mode`
+- `allow_adb_bypass`
+- nanobot runtime limits and timeout controls
 
-Architecture not yet mapped. Follow existing patterns found in the codebase.
-<!-- GSD:architecture-end -->
+If starting a new evaluation task, update this config first.
 
-<!-- GSD:skills-start source:skills/ -->
-## Project Skills
+## How To Run Integration Evaluation
 
-No project skills found. Add skills to any of: `.claude/skills/`, `.agents/skills/`, `.cursor/skills/`, or `.github/skills/` with a `SKILL.md` index file.
-<!-- GSD:skills-end -->
+### 1. Environment
 
-<!-- GSD:workflow-start source:GSD defaults -->
-## GSD Workflow Enforcement
+From repo root:
 
-Before using Edit, Write, or other file-changing tools, start work through a GSD command so planning artifacts and execution context stay in sync.
+```bash
+cd /home/jinli/Project/MobileWorld_fork
+```
 
-Use these entry points:
-- `/gsd-quick` for small fixes, doc updates, and ad-hoc tasks
-- `/gsd-debug` for investigation and bug fixing
-- `/gsd-execute-phase` for planned phase work
+Use project venv (or uv-managed environment) and ensure:
+- MobileWorld backend env is available.
+- `nanobot_fork_path` and `nanobot_config_path` in config are valid.
+- API keys are set as needed (`API_KEY`, optionally judge-related keys).
 
-Do not make direct repo edits outside a GSD workflow unless the user explicitly asks to bypass it.
-<!-- GSD:workflow-end -->
+### 2. Run Eval With Integration Config
 
+Typical command:
 
+```bash
+uv run mobile-world eval \
+  --agent-type qwen3vl \
+  --model-name qwen3-vl-plus \
+  --llm-base-url https://dashscope.aliyuncs.com/compatible-mode/v1 \
+  --framework-config /home/jinli/Project/MobileWorld_fork/configs/framework.nanobot_opengui.mixed.json \
+  --task "TASK_NAME" \
+  --output ./traj_logs/integration_run
+```
 
-<!-- GSD:profile-start -->
-## Developer Profile
+Run all tasks by replacing `--task "TASK_NAME"` with:
 
-> Profile not yet configured. Run `/gsd-profile-user` to generate your developer profile.
-> This section is managed by `generate-claude-profile` -- do not edit manually.
-<!-- GSD:profile-end -->
+```bash
+--task ALL
+```
+
+### 3. Optional Benchmark Post-Processing
+
+Aggregate:
+
+```bash
+uv run mobile-world benchmark aggregate \
+  --framework-run nanobot=./traj_logs/integration_run \
+  --output ./reports/integration_aggregate.json
+```
+
+Conformance check:
+
+```bash
+uv run mobile-world benchmark conformance \
+  --log-root ./traj_logs/integration_run \
+  --output ./reports/integration_conformance.json
+```
+
+Reproducibility:
+
+```bash
+uv run mobile-world benchmark reproducibility \
+  --run-root ./traj_logs/integration_run_1 \
+  --run-root ./traj_logs/integration_run_2 \
+  --run-root ./traj_logs/integration_run_3 \
+  --output ./reports/integration_reproducibility.json
+```
+
+## Metrics Policy
+
+For evaluation-facing summaries, keep MobileWorld native scoring focus:
+- task `score`
+- success count/rate derived from score threshold
+
+Do not add new non-native ranking metrics to eval summary outputs unless explicitly required.
+
+## Artifacts To Check After Run
+
+Per-run:
+- `run_manifest.json`
+- `eval_report_*.json`
+
+Per-task:
+- `score.txt`
+- `traj.json`
+- canonical trajectory/meta files
+- `nanobot_mixed_summary.json` (integration diagnostics)
+
+## Guidance For Future Codex Tasks
+
+When asked to continue integration work:
+1. Validate `configs/framework.nanobot_opengui.mixed.json` first.
+2. Reproduce with a concrete eval command.
+3. Prioritize fixes that preserve MobileWorld native task scoring semantics.
+4. Prefer simplifying over adding new abstraction layers.
+5. Add/adjust protocol tests only for behavior that is actually exercised in nanobot evaluation flow.

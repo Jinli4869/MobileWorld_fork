@@ -1,0 +1,17 @@
+{
+  "framework_profile": "nanobot_opengui",
+  "nanobot_fork_path": "/home/jinli/Project/nanobot_fork",
+  "nanobot_config_path": "/tmp/nanobot_config.json",
+  "gui_claw_path": "/home/jinli/Project/GUI-Claw",
+  "evaluation_mode": "mixed",
+  "allow_adb_bypass": true,
+  "nanobot_max_steps": 25,
+  "nanobot_gui_task_max_steps": 25,
+  "nanobot_timeout_seconds": 600,
+  "nanobot_enable_planner": false,
+  "nanobot_enable_router": false,
+  "env_auto_recover": true,
+  "env_recover_unhealthy_threshold": 2,
+  "judge_model": "qwen3-vl-plus",
+  "judge_api_base": "https://dashscope.aliyuncs.com/compatible-mode/v1"
+}

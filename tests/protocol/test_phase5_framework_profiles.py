@@ -9,30 +9,33 @@ from mobile_world.core.api.info import list_framework_profiles_info
 from mobile_world.core.cli import create_parser
 from mobile_world.core.subcommands import eval as eval_subcommand
 from mobile_world.core.subcommands.eval import load_framework_config
-from mobile_world.runtime.adapters.hermes_template import HermesTemplateAdapter
-from mobile_world.runtime.adapters.openclaw_template import OpenClawTemplateAdapter
 
 
-def test_framework_templates_are_registered():
+def test_framework_profile_registry_contains_nanobot_profile():
     profiles = set(list_framework_profiles())
     assert "nanobot_opengui" in profiles
-    assert "openclaw_template" in profiles
-    assert "hermes_template" in profiles
 
 
-def test_create_framework_adapter_for_templates():
-    openclaw = create_framework_adapter(
-        "openclaw_template",
-        model_name="model-x",
-        llm_base_url="http://localhost:8080/v1",
+def test_create_framework_adapter_for_nanobot_profile(tmp_path: Path):
+    nanobot_fork = tmp_path / "nanobot_fork"
+    nanobot_fork.mkdir(parents=True)
+    nanobot_config = tmp_path / "nanobot-config.json"
+    nanobot_config.write_text(
+        json.dumps({"provider": {"model": "qwen"}}, ensure_ascii=False, indent=2),
+        encoding="utf-8",
     )
-    hermes = create_framework_adapter(
-        "hermes_template",
+
+    adapter = create_framework_adapter(
+        "nanobot_opengui",
         model_name="model-y",
         llm_base_url="http://localhost:8080/v1",
+        nanobot_fork_path=str(nanobot_fork),
+        nanobot_config_path=str(nanobot_config),
+        gui_claw_path=str(tmp_path),
+        evaluation_mode="mixed",
+        allow_adb_bypass=True,
     )
-    assert isinstance(openclaw, OpenClawTemplateAdapter)
-    assert isinstance(hermes, HermesTemplateAdapter)
+    assert adapter.__class__.__name__ == "NanobotOpenGUIAdapter"
 
 
 def test_eval_framework_config_loader(tmp_path):
@@ -46,6 +49,11 @@ def test_eval_framework_config_loader(tmp_path):
                 "gui_claw_path": "/tmp/gui-claw",
                 "evaluation_mode": "mixed",
                 "allow_adb_bypass": True,
+                "nanobot_timeout_seconds": 420,
+                "nanobot_enable_planner": False,
+                "nanobot_enable_router": True,
+                "env_auto_recover": True,
+                "env_recover_unhealthy_threshold": 3,
                 "judge_model": "qwen3-vl-plus",
             }
         ),
@@ -56,6 +64,11 @@ def test_eval_framework_config_loader(tmp_path):
     assert payload["nanobot_config_path"] == "/tmp/nanobot-config.json"
     assert payload["evaluation_mode"] == "mixed"
     assert payload["allow_adb_bypass"] is True
+    assert payload["nanobot_timeout_seconds"] == 420
+    assert payload["nanobot_enable_planner"] is False
+    assert payload["nanobot_enable_router"] is True
+    assert payload["env_auto_recover"] is True
+    assert payload["env_recover_unhealthy_threshold"] == 3
     assert payload["judge_model"] == "qwen3-vl-plus"
 
 
@@ -77,6 +90,13 @@ def test_eval_parser_accepts_framework_profile_flags():
             "--evaluation-mode",
             "mixed",
             "--allow-adb-bypass",
+            "--nanobot-timeout-seconds",
+            "420",
+            "--no-nanobot-enable-planner",
+            "--nanobot-enable-router",
+            "--env-auto-recover",
+            "--env-recover-unhealthy-threshold",
+            "3",
         ]
     )
     assert args.framework_profile == "nanobot_opengui"
@@ -85,16 +105,19 @@ def test_eval_parser_accepts_framework_profile_flags():
     assert args.gui_claw_path == "/tmp/gui-claw"
     assert args.evaluation_mode == "mixed"
     assert args.allow_adb_bypass is True
+    assert args.nanobot_timeout_seconds == 420
+    assert args.nanobot_enable_planner is False
+    assert args.nanobot_enable_router is True
+    assert args.env_auto_recover is True
+    assert args.env_recover_unhealthy_threshold == 3
 
 
 def test_framework_inventory_exposes_capabilities_and_conformance():
     infos = list_framework_profiles_info()
     by_name = {item.profile_name: item for item in infos}
-    assert "openclaw_template" in by_name
-    assert "hermes_template" in by_name
     assert "nanobot_opengui" in by_name
-    assert "gui_action" in by_name["openclaw_template"].capabilities
-    assert by_name["openclaw_template"].conformance in {"pass", "fail"}
+    assert "gui_action" in by_name["nanobot_opengui"].capabilities
+    assert by_name["nanobot_opengui"].conformance in {"pass", "fail"}
 
 
 def test_eval_framework_config_profile_selection_is_deterministic(monkeypatch, tmp_path: Path):
@@ -118,6 +141,11 @@ def test_eval_framework_config_profile_selection_is_deterministic(monkeypatch, t
                 "gui_claw_path": str(tmp_path),
                 "evaluation_mode": "mixed",
                 "allow_adb_bypass": True,
+                "nanobot_timeout_seconds": 420,
+                "nanobot_enable_planner": False,
+                "nanobot_enable_router": True,
+                "env_auto_recover": True,
+                "env_recover_unhealthy_threshold": 3,
                 "judge_model": "qwen3-vl-plus",
             }
         ),
@@ -131,7 +159,7 @@ def test_eval_framework_config_profile_selection_is_deterministic(monkeypatch, t
             "--agent-type",
             "qwen3vl",
             "--framework-profile",
-            "hermes_template",
+            "qwen3vl",
             "--framework-config",
             str(config_path),
             "--output",
@@ -147,6 +175,12 @@ def test_eval_framework_config_profile_selection_is_deterministic(monkeypatch, t
     assert captured_kwargs["gui_claw_path"] == str(tmp_path)
     assert captured_kwargs["evaluation_mode"] == "mixed"
     assert captured_kwargs["allow_adb_bypass"] is True
+    assert captured_kwargs["nanobot_timeout_seconds"] == 420
+    assert captured_kwargs["nanobot_enable_planner"] is False
+    # Router is forced off when planner is off.
+    assert captured_kwargs["nanobot_enable_router"] is False
+    assert captured_kwargs["env_auto_recover"] is True
+    assert captured_kwargs["env_recover_unhealthy_threshold"] == 3
 
     manifest_path = tmp_path / "logs" / "run_manifest.json"
     assert manifest_path.exists() is True
@@ -154,3 +188,8 @@ def test_eval_framework_config_profile_selection_is_deterministic(monkeypatch, t
     assert manifest["framework_profile"] == "nanobot_opengui"
     assert manifest["evaluation_mode"] == "mixed"
     assert manifest["allow_adb_bypass"] is True
+    assert manifest["nanobot_timeout_seconds"] == 420
+    assert manifest["nanobot_enable_planner"] is False
+    assert manifest["nanobot_enable_router"] is False
+    assert manifest["env_auto_recover"] is True
+    assert manifest["env_recover_unhealthy_threshold"] == 3

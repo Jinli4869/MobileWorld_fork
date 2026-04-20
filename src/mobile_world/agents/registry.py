@@ -19,9 +19,7 @@ from mobile_world.agents.implementations.planner_executor import PlannerExecutor
 from mobile_world.agents.implementations.qwen3vl import Qwen3VLAgentMCP
 from mobile_world.agents.implementations.seed_agent import SeedAgent
 from mobile_world.agents.implementations.ui_venus_agent import VenusNaviAgent
-from mobile_world.runtime.adapters.hermes_template import HermesTemplateAdapter
 from mobile_world.runtime.adapters.nanobot_opengui import NanobotOpenGUIAdapter
-from mobile_world.runtime.adapters.openclaw_template import OpenClawTemplateAdapter
 from mobile_world.runtime.protocol.adapter import AdapterProfile, FrameworkAdapter, LegacyAgentAdapter
 from mobile_world.runtime.protocol.registry import (
     get_adapter_registration,
@@ -107,22 +105,12 @@ def _nanobot_opengui_factory(**kwargs) -> FrameworkAdapter:
         gui_claw_path=kwargs.get("gui_claw_path"),
         evaluation_mode=kwargs.get("evaluation_mode"),
         allow_adb_bypass=kwargs.get("allow_adb_bypass"),
-    )
-
-
-def _openclaw_template_factory(**kwargs) -> FrameworkAdapter:
-    return OpenClawTemplateAdapter(
-        model_name=kwargs.get("model_name"),
-        llm_base_url=kwargs.get("llm_base_url"),
-        api_key=kwargs.get("api_key"),
-    )
-
-
-def _hermes_template_factory(**kwargs) -> FrameworkAdapter:
-    return HermesTemplateAdapter(
-        model_name=kwargs.get("model_name"),
-        llm_base_url=kwargs.get("llm_base_url"),
-        api_key=kwargs.get("api_key"),
+        nanobot_max_steps=kwargs.get("nanobot_max_steps"),
+        nanobot_timeout_seconds=kwargs.get("nanobot_timeout_seconds"),
+        nanobot_enable_planner=kwargs.get("nanobot_enable_planner"),
+        nanobot_enable_router=kwargs.get("nanobot_enable_router"),
+        nanobot_gui_task_max_steps=kwargs.get("nanobot_gui_task_max_steps"),
+        nanobot_gui_task_max_calls=kwargs.get("nanobot_gui_task_max_calls"),
     )
 
 
@@ -136,24 +124,6 @@ def register_reference_framework_adapters() -> None:
             factory=_nanobot_opengui_factory,
             capabilities=["gui_action", "mixed_mode"],
             metadata={"source": "mobile_world.runtime.adapters.nanobot_opengui", "execution": "mixed"},
-        )
-    if not has_adapter("openclaw_template"):
-        register_adapter_profile(
-            "openclaw_template",
-            framework="openclaw",
-            adapter_class=OpenClawTemplateAdapter,
-            factory=_openclaw_template_factory,
-            capabilities=["gui_action", "template"],
-            metadata={"source": "mobile_world.runtime.adapters.openclaw_template", "template": True},
-        )
-    if not has_adapter("hermes_template"):
-        register_adapter_profile(
-            "hermes_template",
-            framework="hermes",
-            adapter_class=HermesTemplateAdapter,
-            factory=_hermes_template_factory,
-            capabilities=["gui_action", "template"],
-            metadata={"source": "mobile_world.runtime.adapters.hermes_template", "template": True},
         )
 
 

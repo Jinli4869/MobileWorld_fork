@@ -46,6 +46,23 @@ def _normalize_bool(value: object, *, default: bool) -> bool:
     return bool(value)
 
 
+def _normalize_positive_int(
+    value: object,
+    *,
+    default: int | None,
+    field_name: str,
+) -> int | None:
+    if value is None:
+        return default
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        raise ValueError(f"{field_name} must be an integer, got: {value!r}") from None
+    if parsed <= 0:
+        raise ValueError(f"{field_name} must be > 0, got: {parsed}")
+    return parsed
+
+
 def _path_fingerprint(path_value: str | None) -> dict:
     if not path_value:
         return {"path": None, "exists": False, "fingerprint": None, "path_type": None}
@@ -92,6 +109,14 @@ def _write_run_manifest(
     nanobot_fork_path: str | None,
     nanobot_config_path: str | None,
     gui_claw_path: str | None,
+    nanobot_max_steps: int | None,
+    nanobot_gui_task_max_steps: int | None,
+    nanobot_gui_task_max_calls: int | None,
+    nanobot_timeout_seconds: int | None,
+    nanobot_enable_planner: bool | None,
+    nanobot_enable_router: bool | None,
+    env_auto_recover: bool,
+    env_recover_unhealthy_threshold: int,
 ) -> Path:
     output_root = Path(run_root).expanduser()
     output_root.mkdir(parents=True, exist_ok=True)
@@ -103,6 +128,14 @@ def _write_run_manifest(
         "framework_profile": framework_profile,
         "evaluation_mode": evaluation_mode,
         "allow_adb_bypass": bool(allow_adb_bypass),
+        "nanobot_max_steps": nanobot_max_steps,
+        "nanobot_gui_task_max_steps": nanobot_gui_task_max_steps,
+        "nanobot_gui_task_max_calls": nanobot_gui_task_max_calls,
+        "nanobot_timeout_seconds": nanobot_timeout_seconds,
+        "nanobot_enable_planner": nanobot_enable_planner,
+        "nanobot_enable_router": nanobot_enable_router,
+        "env_auto_recover": env_auto_recover,
+        "env_recover_unhealthy_threshold": env_recover_unhealthy_threshold,
         "task_set": canonical_tasks,
         "task_set_fingerprint": _task_set_fingerprint(canonical_tasks),
         "path_fingerprints": {
@@ -334,6 +367,70 @@ def _add_common_arguments(parser: argparse.ArgumentParser) -> None:
         default=None,
         help="Allow mixed execution to bypass MobileWorld tool router and use ADB-capable framework lanes",
     )
+    parser.add_argument(
+        "--nanobot-max-steps",
+        "--nanobot_max_steps",
+        dest="nanobot_max_steps",
+        type=int,
+        default=None,
+        help="Max total tool iterations for nanobot/opengui mixed loop (default for nanobot_opengui: 50)",
+    )
+    parser.add_argument(
+        "--nanobot-gui-task-max-steps",
+        "--nanobot_gui_task_max_steps",
+        dest="nanobot_gui_task_max_steps",
+        type=int,
+        default=None,
+        help="Max GUI steps per gui_task call inside nanobot/opengui mixed loop (default: 50)",
+    )
+    parser.add_argument(
+        "--nanobot-gui-task-max-calls",
+        "--nanobot_gui_task_max_calls",
+        dest="nanobot_gui_task_max_calls",
+        type=int,
+        default=None,
+        help="Max gui_task invocations per task inside nanobot/opengui mixed loop (default: 3)",
+    )
+    parser.add_argument(
+        "--nanobot-timeout-seconds",
+        "--nanobot_timeout_seconds",
+        dest="nanobot_timeout_seconds",
+        type=int,
+        default=None,
+        help="Hard timeout in seconds for one nanobot mixed execution (overrides adaptive default when set)",
+    )
+    parser.add_argument(
+        "--nanobot-enable-planner",
+        "--nanobot_enable_planner",
+        dest="nanobot_enable_planner",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Enable nanobot planner path (default for nanobot_opengui: false)",
+    )
+    parser.add_argument(
+        "--nanobot-enable-router",
+        "--nanobot_enable_router",
+        dest="nanobot_enable_router",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Enable nanobot tree router (default for nanobot_opengui: false; requires planner enabled)",
+    )
+    parser.add_argument(
+        "--env-auto-recover",
+        "--env_auto_recover",
+        dest="env_auto_recover",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Auto-recover unhealthy backend by restarting container when unhealthy threshold is reached",
+    )
+    parser.add_argument(
+        "--env-recover-unhealthy-threshold",
+        "--env_recover_unhealthy_threshold",
+        dest="env_recover_unhealthy_threshold",
+        type=int,
+        default=None,
+        help="Consecutive unhealthy retries before triggering container restart (default: 2)",
+    )
 
 
 def configure_parser(subparsers: argparse._SubParsersAction) -> None:
@@ -395,6 +492,14 @@ async def execute(args: argparse.Namespace) -> None:
     gui_claw_path = getattr(args, "gui_claw_path", _DEFAULT_GUI_CLAW_PATH)
     evaluation_mode = getattr(args, "evaluation_mode", None)
     allow_adb_bypass = getattr(args, "allow_adb_bypass", None)
+    nanobot_max_steps = getattr(args, "nanobot_max_steps", None)
+    nanobot_gui_task_max_steps = getattr(args, "nanobot_gui_task_max_steps", None)
+    nanobot_gui_task_max_calls = getattr(args, "nanobot_gui_task_max_calls", None)
+    nanobot_timeout_seconds = getattr(args, "nanobot_timeout_seconds", None)
+    nanobot_enable_planner = getattr(args, "nanobot_enable_planner", None)
+    nanobot_enable_router = getattr(args, "nanobot_enable_router", None)
+    env_auto_recover = getattr(args, "env_auto_recover", None)
+    env_recover_unhealthy_threshold = getattr(args, "env_recover_unhealthy_threshold", None)
     judge_model = getattr(args, "judge_model", "qwen3-vl-plus")
     judge_api_base = getattr(args, "judge_api_base", None)
     judge_api_key = (
@@ -414,6 +519,22 @@ async def execute(args: argparse.Namespace) -> None:
         evaluation_mode = config_payload.get("evaluation_mode", evaluation_mode)
         if "allow_adb_bypass" in config_payload:
             allow_adb_bypass = config_payload.get("allow_adb_bypass")
+        if "nanobot_max_steps" in config_payload:
+            nanobot_max_steps = config_payload.get("nanobot_max_steps")
+        if "nanobot_gui_task_max_steps" in config_payload:
+            nanobot_gui_task_max_steps = config_payload.get("nanobot_gui_task_max_steps")
+        if "nanobot_gui_task_max_calls" in config_payload:
+            nanobot_gui_task_max_calls = config_payload.get("nanobot_gui_task_max_calls")
+        if "nanobot_timeout_seconds" in config_payload:
+            nanobot_timeout_seconds = config_payload.get("nanobot_timeout_seconds")
+        if "nanobot_enable_planner" in config_payload:
+            nanobot_enable_planner = config_payload.get("nanobot_enable_planner")
+        if "nanobot_enable_router" in config_payload:
+            nanobot_enable_router = config_payload.get("nanobot_enable_router")
+        if "env_auto_recover" in config_payload:
+            env_auto_recover = config_payload.get("env_auto_recover")
+        if "env_recover_unhealthy_threshold" in config_payload:
+            env_recover_unhealthy_threshold = config_payload.get("env_recover_unhealthy_threshold")
         judge_model = config_payload.get("judge_model", judge_model)
         judge_api_base = config_payload.get("judge_api_base", judge_api_base)
         judge_api_key = config_payload.get("judge_api_key", judge_api_key)
@@ -428,6 +549,33 @@ async def execute(args: argparse.Namespace) -> None:
         gui_claw_path = gui_claw_path or _DEFAULT_GUI_CLAW_PATH
         evaluation_mode = evaluation_mode or "mixed"
         allow_adb_bypass = _normalize_bool(allow_adb_bypass, default=True)
+        nanobot_max_steps = _normalize_positive_int(
+            nanobot_max_steps,
+            default=50,
+            field_name="nanobot_max_steps",
+        )
+        nanobot_gui_task_max_steps = _normalize_positive_int(
+            nanobot_gui_task_max_steps,
+            default=50,
+            field_name="nanobot_gui_task_max_steps",
+        )
+        nanobot_gui_task_max_calls = _normalize_positive_int(
+            nanobot_gui_task_max_calls,
+            default=3,
+            field_name="nanobot_gui_task_max_calls",
+        )
+        nanobot_timeout_seconds = _normalize_positive_int(
+            nanobot_timeout_seconds,
+            default=None,
+            field_name="nanobot_timeout_seconds",
+        )
+        nanobot_enable_planner = _normalize_bool(nanobot_enable_planner, default=False)
+        nanobot_enable_router = _normalize_bool(
+            nanobot_enable_router,
+            default=False,
+        )
+        if not nanobot_enable_planner:
+            nanobot_enable_router = False
         if not allow_adb_bypass:
             raise ValueError("nanobot_opengui requires allow_adb_bypass=true")
         if not nanobot_config_path:
@@ -435,6 +583,47 @@ async def execute(args: argparse.Namespace) -> None:
     else:
         evaluation_mode = evaluation_mode or "standard"
         allow_adb_bypass = _normalize_bool(allow_adb_bypass, default=False)
+        if nanobot_max_steps is not None:
+            nanobot_max_steps = _normalize_positive_int(
+                nanobot_max_steps,
+                default=None,
+                field_name="nanobot_max_steps",
+            )
+        if nanobot_timeout_seconds is not None:
+            nanobot_timeout_seconds = _normalize_positive_int(
+                nanobot_timeout_seconds,
+                default=None,
+                field_name="nanobot_timeout_seconds",
+            )
+        if nanobot_gui_task_max_steps is not None:
+            nanobot_gui_task_max_steps = _normalize_positive_int(
+                nanobot_gui_task_max_steps,
+                default=None,
+                field_name="nanobot_gui_task_max_steps",
+            )
+        if nanobot_gui_task_max_calls is not None:
+            nanobot_gui_task_max_calls = _normalize_positive_int(
+                nanobot_gui_task_max_calls,
+                default=None,
+                field_name="nanobot_gui_task_max_calls",
+            )
+        nanobot_enable_planner = (
+            _normalize_bool(nanobot_enable_planner, default=False)
+            if nanobot_enable_planner is not None
+            else None
+        )
+        nanobot_enable_router = (
+            _normalize_bool(nanobot_enable_router, default=False)
+            if nanobot_enable_router is not None
+            else None
+        )
+
+    env_auto_recover = _normalize_bool(env_auto_recover, default=True)
+    env_recover_unhealthy_threshold = _normalize_positive_int(
+        env_recover_unhealthy_threshold,
+        default=2,
+        field_name="env_recover_unhealthy_threshold",
+    )
 
     # Check if running all tasks
     run_all_tasks = args.task and args.task.upper() == "ALL"
@@ -486,6 +675,14 @@ async def execute(args: argparse.Namespace) -> None:
         gui_claw_path=gui_claw_path,
         evaluation_mode=evaluation_mode,
         allow_adb_bypass=allow_adb_bypass,
+        nanobot_max_steps=nanobot_max_steps,
+        nanobot_gui_task_max_steps=nanobot_gui_task_max_steps,
+        nanobot_gui_task_max_calls=nanobot_gui_task_max_calls,
+        nanobot_timeout_seconds=nanobot_timeout_seconds,
+        nanobot_enable_planner=nanobot_enable_planner,
+        nanobot_enable_router=nanobot_enable_router,
+        env_auto_recover=env_auto_recover,
+        env_recover_unhealthy_threshold=env_recover_unhealthy_threshold,
     )
     task_names_for_manifest = sorted(
         {
@@ -508,6 +705,14 @@ async def execute(args: argparse.Namespace) -> None:
         nanobot_fork_path=nanobot_fork_path,
         nanobot_config_path=nanobot_config_path,
         gui_claw_path=gui_claw_path,
+        nanobot_max_steps=nanobot_max_steps,
+        nanobot_gui_task_max_steps=nanobot_gui_task_max_steps,
+        nanobot_gui_task_max_calls=nanobot_gui_task_max_calls,
+        nanobot_timeout_seconds=nanobot_timeout_seconds,
+        nanobot_enable_planner=nanobot_enable_planner,
+        nanobot_enable_router=nanobot_enable_router,
+        env_auto_recover=env_auto_recover,
+        env_recover_unhealthy_threshold=env_recover_unhealthy_threshold,
     )
     logger.info("Run manifest written: {}", run_manifest_path)
 
@@ -518,20 +723,6 @@ async def execute(args: argparse.Namespace) -> None:
 
         successful_tasks = sum(1 for result in task_results if result["score"] > 0.99)
         overall_success_rate = successful_tasks / total_tasks if total_tasks > 0 else 0.0
-        metric_rows = [result.get("metrics") for result in task_results if result.get("metrics")]
-        avg_tokens_per_step = []
-        ttft_ms = []
-        tool_success_rate = []
-        for metrics in metric_rows:
-            token_usage = metrics.get("token_usage", {})
-            latency = metrics.get("latency", {})
-            reliability = metrics.get("reliability", {})
-            if token_usage.get("avg_total_tokens_per_step") is not None:
-                avg_tokens_per_step.append(float(token_usage["avg_total_tokens_per_step"]))
-            if latency.get("ttft_ms") is not None:
-                ttft_ms.append(float(latency["ttft_ms"]))
-            if reliability.get("tool_success_rate") is not None:
-                tool_success_rate.append(float(reliability["tool_success_rate"]))
 
         report = {
             "summary": {
@@ -541,17 +732,6 @@ async def execute(args: argparse.Namespace) -> None:
                 "total_tasks_with_no_results": len(task_list_with_no_results),
                 "overall_success_rate": overall_success_rate,
                 "total_duration_seconds": total_duration,
-                "kpi": {
-                    "avg_tokens_per_step_run_mean": round(sum(avg_tokens_per_step) / len(avg_tokens_per_step), 3)
-                    if avg_tokens_per_step
-                    else None,
-                    "avg_ttft_ms_run_mean": round(sum(ttft_ms) / len(ttft_ms), 3) if ttft_ms else None,
-                    "avg_tool_success_rate_run_mean": round(
-                        sum(tool_success_rate) / len(tool_success_rate), 6
-                    )
-                    if tool_success_rate
-                    else None,
-                },
             },
             "metadata": {
                 "agent_type": args.agent_type,
@@ -561,6 +741,14 @@ async def execute(args: argparse.Namespace) -> None:
                 "framework_profile": framework_profile,
                 "evaluation_mode": evaluation_mode,
                 "allow_adb_bypass": bool(allow_adb_bypass),
+                "nanobot_max_steps": nanobot_max_steps,
+                "nanobot_gui_task_max_steps": nanobot_gui_task_max_steps,
+                "nanobot_gui_task_max_calls": nanobot_gui_task_max_calls,
+                "nanobot_timeout_seconds": nanobot_timeout_seconds,
+                "nanobot_enable_planner": nanobot_enable_planner,
+                "nanobot_enable_router": nanobot_enable_router,
+                "env_auto_recover": env_auto_recover,
+                "env_recover_unhealthy_threshold": env_recover_unhealthy_threshold,
                 "run_manifest": str(run_manifest_path),
             },
             "tasks_with_results": task_results,

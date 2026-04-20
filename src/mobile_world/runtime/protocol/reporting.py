@@ -31,41 +31,10 @@ def _parse_score(score_path: Path) -> float:
     raise ValueError(f"Unable to parse score from {score_path}")
 
 
-def _to_float(value: Any) -> float | None:
-    if value is None:
-        return None
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return None
-
-
-def _to_int(value: Any) -> int:
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return 0
-
-
 def _mean(values: list[float]) -> float | None:
     if not values:
         return None
     return round(sum(values) / len(values), 6)
-
-
-def _judge_agreement_passed(audit: dict[str, Any]) -> bool | None:
-    checks = audit.get("consistency_checks", [])
-    if not isinstance(checks, list):
-        return None
-    for check in checks:
-        if not isinstance(check, dict):
-            continue
-        if check.get("name") == "judge_agreement":
-            passed = check.get("passed")
-            if isinstance(passed, bool):
-                return passed
-            return None
-    return None
 
 
 def _load_run_manifest(root: Path) -> dict[str, Any]:
@@ -161,15 +130,7 @@ def _framework_summary(
     success_threshold: float,
 ) -> dict[str, Any]:
     scores: list[float] = []
-    ttft_values: list[float] = []
-    tool_success_rates: list[float] = []
-    invalid_action_rates: list[float] = []
-    step_counts: list[float] = []
     successes = 0
-    tokens_success_total = 0.0
-    cost_per_success_values: list[float] = []
-    judge_checks_total = 0
-    judge_checks_passed = 0
 
     for task_name in task_names:
         record = records.get(task_name)
@@ -182,43 +143,8 @@ def _framework_summary(
         if is_success:
             successes += 1
 
-        token_total = _to_float(
-            record.metrics.get("token_usage", {}).get("total", {}).get("total_tokens")
-        )
-        if is_success and token_total is not None:
-            tokens_success_total += token_total
-
-        cost_per_success = _to_float(record.metrics.get("cost", {}).get("cost_per_success"))
-        if is_success and cost_per_success is not None:
-            cost_per_success_values.append(cost_per_success)
-
-        ttft_ms = _to_float(record.metrics.get("latency", {}).get("ttft_ms"))
-        if ttft_ms is not None:
-            ttft_values.append(ttft_ms)
-
-        tool_success_rate = _to_float(record.metrics.get("reliability", {}).get("tool_success_rate"))
-        if tool_success_rate is not None:
-            tool_success_rates.append(tool_success_rate)
-
-        invalid_action_rate = _to_float(record.metrics.get("reliability", {}).get("invalid_action_rate"))
-        if invalid_action_rate is not None:
-            invalid_action_rates.append(invalid_action_rate)
-
-        total_steps = _to_float(record.metrics.get("reliability", {}).get("total_steps"))
-        if total_steps is not None:
-            step_counts.append(total_steps)
-
-        judge_agreement = _judge_agreement_passed(record.evaluator_audit)
-        if judge_agreement is not None:
-            judge_checks_total += 1
-            judge_checks_passed += int(judge_agreement)
-
     task_count = len(task_names)
     success_rate = (successes / task_count) if task_count else 0.0
-    tokens_per_success = (tokens_success_total / successes) if successes > 0 else None
-    judge_agreement_rate = (
-        round(judge_checks_passed / judge_checks_total, 6) if judge_checks_total else None
-    )
 
     return {
         "framework": framework,
@@ -226,42 +152,6 @@ def _framework_summary(
         "successes": successes,
         "success_rate": round(success_rate, 6),
         "avg_score": _mean(scores),
-        "tokens_per_success": round(tokens_per_success, 6) if tokens_per_success is not None else None,
-        "cost_per_success": _mean(cost_per_success_values),
-        "avg_ttft_ms": _mean(ttft_values),
-        "avg_tool_success_rate": _mean(tool_success_rates),
-        "avg_invalid_action_rate": _mean(invalid_action_rates),
-        "avg_steps": _mean(step_counts),
-        "judge_agreement_rate": judge_agreement_rate,
-    }
-
-
-def _mixed_lane_metrics(*, records: dict[str, TaskRunRecord], task_names: list[str]) -> dict[str, Any]:
-    adb_calls = 0
-    gui_task_calls = 0
-    deeplink_calls = 0
-    gui_steps = 0
-
-    for task_name in task_names:
-        record = records.get(task_name)
-        summary = record.mixed_summary if record else None
-        if not isinstance(summary, dict):
-            continue
-        adb_calls += _to_int(summary.get("adb_calls"))
-        gui_task_calls += _to_int(summary.get("gui_task_calls"))
-        deeplink_calls += _to_int(summary.get("deeplink_calls"))
-        gui_steps += _to_int(summary.get("gui_steps"))
-
-    tasks_compared = len(task_names)
-    return {
-        "adb_calls": adb_calls,
-        "gui_task_calls": gui_task_calls,
-        "deeplink_calls": deeplink_calls,
-        "gui_steps": gui_steps,
-        "avg_adb_calls_per_task": round(adb_calls / tasks_compared, 6) if tasks_compared else 0.0,
-        "avg_gui_task_calls_per_task": round(gui_task_calls / tasks_compared, 6) if tasks_compared else 0.0,
-        "avg_deeplink_calls_per_task": round(deeplink_calls / tasks_compared, 6) if tasks_compared else 0.0,
-        "avg_gui_steps_per_task": round(gui_steps / tasks_compared, 6) if tasks_compared else 0.0,
     }
 
 
@@ -311,11 +201,6 @@ def aggregate_framework_runs(
         )
         summary["evaluation_mode"] = bundle.evaluation_mode
         summary["allow_adb_bypass"] = bundle.allow_adb_bypass
-        if bundle.evaluation_mode == "mixed":
-            summary["lane_metrics"] = _mixed_lane_metrics(
-                records=bundle.records,
-                task_names=common_tasks,
-            )
         summaries.append(summary)
 
     def _sort_key(row: dict[str, Any]) -> tuple[float, float]:
@@ -342,35 +227,6 @@ def aggregate_framework_runs(
             row[f"{framework}_score"] = record.score if record else None
         task_matrix.append(row)
 
-    efficiency_panel = [
-        {
-            "framework": row["framework"],
-            "tokens_per_success": row["tokens_per_success"],
-            "cost_per_success": row["cost_per_success"],
-            "avg_steps": row["avg_steps"],
-        }
-        for row in summaries
-    ]
-    latency_panel = [
-        {"framework": row["framework"], "avg_ttft_ms": row["avg_ttft_ms"]}
-        for row in summaries
-    ]
-    reliability_panel = [
-        {
-            "framework": row["framework"],
-            "avg_tool_success_rate": row["avg_tool_success_rate"],
-            "avg_invalid_action_rate": row["avg_invalid_action_rate"],
-        }
-        for row in summaries
-    ]
-    evaluation_quality_panel = [
-        {
-            "framework": row["framework"],
-            "judge_agreement_rate": row["judge_agreement_rate"],
-        }
-        for row in summaries
-    ]
-
     leaderboards = {
         "standard": standard_leaderboard,
         "mixed": mixed_leaderboard,
@@ -388,7 +244,7 @@ def aggregate_framework_runs(
     }
 
     return {
-        "schema_version": "1.1.0",
+        "schema_version": "1.2.0",
         "generated_at": datetime.now(UTC).isoformat(),
         "config": {
             "success_threshold": success_threshold,
@@ -399,14 +255,8 @@ def aggregate_framework_runs(
         "leaderboards": leaderboards,
         "leaderboard": legacy_leaderboard,
         "comparability_notes": [
-            "mixed leaderboard allows ADB/deeplink/gui_task bypass lanes and must not be rank-merged directly with standard leaderboard."
+            "mixed and standard leaderboards are reported separately and should not be rank-merged directly."
         ],
-        "kpi_panels": {
-            "efficiency": efficiency_panel,
-            "latency": latency_panel,
-            "reliability": reliability_panel,
-            "evaluation_quality": evaluation_quality_panel,
-        },
         "task_matrix": task_matrix,
     }
 

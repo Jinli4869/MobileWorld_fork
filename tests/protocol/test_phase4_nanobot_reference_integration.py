@@ -159,12 +159,133 @@ def test_create_framework_adapter_nanobot_profile(tmp_path: Path):
                     "deeplink_calls": 0,
                     "gui_steps": 5,
                     "trace_refs": ["/tmp/trace.jsonl"],
+                    "token_usage_main": {
+                        "prompt_tokens": 10,
+                        "completion_tokens": 2,
+                        "cached_tokens": 0,
+                        "total_tokens": 12,
+                    },
+                    "token_usage_gui_task": {
+                        "prompt_tokens": 6,
+                        "completion_tokens": 1,
+                        "cached_tokens": 0,
+                        "total_tokens": 7,
+                    },
+                    "token_usage_total": {
+                        "prompt_tokens": 16,
+                        "completion_tokens": 3,
+                        "cached_tokens": 0,
+                        "total_tokens": 19,
+                    },
                 }
             },
         )
     )
     assert step.action["action_type"] == "finished"
     assert step.done is True
+    assert step.info["token_usage"]["total_tokens"] == 19
+
+
+def test_nanobot_adapter_step_outputs_answer_for_pure_answer_tasks(tmp_path: Path):
+    nanobot_fork = tmp_path / "nanobot_fork"
+    nanobot_fork.mkdir(parents=True)
+    nanobot_config = tmp_path / "nanobot-config.json"
+    _write_nanobot_config(nanobot_config)
+
+    adapter = NanobotOpenGUIAdapter(
+        nanobot_fork_path=str(nanobot_fork),
+        nanobot_config_path=str(nanobot_config),
+        gui_claw_path=str(tmp_path),
+        evaluation_mode="mixed",
+        allow_adb_bypass=True,
+    )
+    init = adapter.initialize(
+        AdapterInitializeInput(
+            task_name="ChromeSearchBeijingWeatherTask",
+            task_goal="Search weather in Beijing and respond only with a single integer",
+            run_id="ChromeSearchBeijingWeatherTask-0",
+            options={
+                "output_dir": str(tmp_path),
+                "nanobot_config_path": str(nanobot_config),
+                "evaluation_mode": "mixed",
+                "allow_adb_bypass": True,
+            },
+        )
+    )
+    assert init.ok is True
+
+    step = adapter.step(
+        AdapterStepInput(
+            run_id="ChromeSearchBeijingWeatherTask-0",
+            task_name="ChromeSearchBeijingWeatherTask",
+            step_index=1,
+            observation={
+                "nanobot_mixed_result": {
+                    "summary": "Current weather in Beijing is 23°C.",
+                    "success": True,
+                    "adb_calls": 0,
+                    "gui_task_calls": 1,
+                    "deeplink_calls": 0,
+                    "gui_steps": 4,
+                    "trace_refs": [],
+                }
+            },
+        )
+    )
+    assert step.done is True
+    assert step.action["action_type"] == "answer"
+    assert step.action["text"] == "23"
+
+
+def test_nanobot_adapter_step_outputs_company_name_for_maps_answer_task(tmp_path: Path):
+    nanobot_fork = tmp_path / "nanobot_fork"
+    nanobot_fork.mkdir(parents=True)
+    nanobot_config = tmp_path / "nanobot-config.json"
+    _write_nanobot_config(nanobot_config)
+
+    adapter = NanobotOpenGUIAdapter(
+        nanobot_fork_path=str(nanobot_fork),
+        nanobot_config_path=str(nanobot_config),
+        gui_claw_path=str(tmp_path),
+        evaluation_mode="mixed",
+        allow_adb_bypass=True,
+    )
+    init = adapter.initialize(
+        AdapterInitializeInput(
+            task_name="GoogleMapsAlibabaSouthNeighborTask",
+            task_goal="Find the company and output the company name in English only",
+            run_id="GoogleMapsAlibabaSouthNeighborTask-0",
+            options={
+                "output_dir": str(tmp_path),
+                "nanobot_config_path": str(nanobot_config),
+                "evaluation_mode": "mixed",
+                "allow_adb_bypass": True,
+            },
+        )
+    )
+    assert init.ok is True
+
+    step = adapter.step(
+        AdapterStepInput(
+            run_id="GoogleMapsAlibabaSouthNeighborTask-0",
+            task_name="GoogleMapsAlibabaSouthNeighborTask",
+            step_index=1,
+            observation={
+                "nanobot_mixed_result": {
+                    "summary": "The company name in English is NetEase.",
+                    "success": True,
+                    "adb_calls": 1,
+                    "gui_task_calls": 1,
+                    "deeplink_calls": 0,
+                    "gui_steps": 5,
+                    "trace_refs": [],
+                }
+            },
+        )
+    )
+    assert step.done is True
+    assert step.action["action_type"] == "answer"
+    assert step.action["text"] == "NetEase"
 
 
 def test_nanobot_adapter_initialize_fails_when_config_path_missing(tmp_path: Path):
@@ -245,12 +366,35 @@ def test_nanobot_adapter_finalize_emits_mixed_summary_artifact(tmp_path: Path):
             observation={
                 "nanobot_mixed_result": {
                     "summary": "done",
-                    "success": True,
+                    "success": False,
                     "adb_calls": 3,
                     "gui_task_calls": 1,
                     "deeplink_calls": 1,
                     "gui_steps": 7,
                     "trace_refs": [str(tmp_path / "trace.jsonl")],
+                    "token_usage_main": {
+                        "prompt_tokens": 30,
+                        "completion_tokens": 10,
+                        "cached_tokens": 0,
+                        "total_tokens": 40,
+                    },
+                    "token_usage_gui_task": {
+                        "prompt_tokens": 8,
+                        "completion_tokens": 2,
+                        "cached_tokens": 0,
+                        "total_tokens": 10,
+                    },
+                    "token_usage_total": {
+                        "prompt_tokens": 38,
+                        "completion_tokens": 12,
+                        "cached_tokens": 0,
+                        "total_tokens": 50,
+                    },
+                    "token_usage_incomplete": True,
+                    "timeout_triggered": True,
+                    "execution_cancelled": True,
+                    "effective_timeout_seconds": 300,
+                    "error": "nanobot_execution_timeout:300s",
                 }
             },
         )
@@ -279,6 +423,13 @@ def test_nanobot_adapter_finalize_emits_mixed_summary_artifact(tmp_path: Path):
     assert payload["gui_task_calls"] == 1
     assert payload["deeplink_calls"] == 1
     assert payload["gui_steps"] == 7
+    assert payload["timeout_triggered"] is True
+    assert payload["execution_cancelled"] is True
+    assert payload["effective_timeout_seconds"] == 300
+    assert payload["token_usage_main"]["total_tokens"] == 40
+    assert payload["token_usage_gui_task"]["total_tokens"] == 10
+    assert payload["token_usage_total"]["total_tokens"] == 50
+    assert payload["token_usage_incomplete"] is True
 
 
 def test_runner_executes_with_framework_adapter_and_preserves_artifact_shape(tmp_path: Path):

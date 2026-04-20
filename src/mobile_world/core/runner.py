@@ -1,10 +1,12 @@
 import json
 import os
 import random
+import subprocess
 import threading
 import time
 from queue import Queue
 
+import requests
 from dotenv import load_dotenv
 from joblib import Parallel, delayed
 from loguru import logger
@@ -40,6 +42,60 @@ from mobile_world.runtime.utils.models import ANSWER, UNKNOWN, JSONAction
 from mobile_world.runtime.utils.trajectory_logger import METRICS_FILE_NAME, TrajLogger
 
 load_dotenv()
+
+
+def _is_backend_healthy(env_url: str, device: str) -> bool:
+    try:
+        response = requests.get(f"{env_url}/health", timeout=5)
+        if not response.ok:
+            return False
+        payload = response.json()
+        if not bool(payload.get("ok", False)):
+            return False
+        devices = payload.get("devices") or []
+        status = payload.get("device_status") or {}
+        if device not in devices:
+            return False
+        return bool(status.get(device, False))
+    except Exception:
+        return False
+
+
+def _wait_backend_healthy(
+    env_url: str,
+    device: str,
+    *,
+    timeout_seconds: int = 240,
+    poll_interval_seconds: int = 5,
+) -> bool:
+    deadline = time.time() + timeout_seconds
+    while time.time() < deadline:
+        if _is_backend_healthy(env_url, device):
+            return True
+        time.sleep(poll_interval_seconds)
+    return False
+
+
+def _restart_backend_container(container_name: str) -> bool:
+    try:
+        result = subprocess.run(
+            ["docker", "restart", container_name],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=180,
+        )
+    except Exception:
+        logger.exception("Failed to restart backend container {}", container_name)
+        return False
+    if result.returncode != 0:
+        logger.error(
+            "docker restart failed for {}: {}",
+            container_name,
+            (result.stderr or result.stdout or "").strip(),
+        )
+        return False
+    return True
 
 
 def _execute_single_task(
@@ -309,6 +365,14 @@ def _process_task_on_env(
     gui_claw_path: str | None = None,
     evaluation_mode: str | None = None,
     allow_adb_bypass: bool | None = None,
+    nanobot_max_steps: int | None = None,
+    nanobot_timeout_seconds: int | None = None,
+    nanobot_enable_planner: bool | None = None,
+    nanobot_enable_router: bool | None = None,
+    nanobot_gui_task_max_steps: int | None = None,
+    nanobot_gui_task_max_calls: int | None = None,
+    env_auto_recover: bool = True,
+    env_recover_unhealthy_threshold: int = 2,
     device: str = "emulator-5554",
     **kwargs,
 ) -> dict:
@@ -417,6 +481,12 @@ def _process_task_on_env(
                     gui_claw_path=gui_claw_path,
                     evaluation_mode=evaluation_mode,
                     allow_adb_bypass=allow_adb_bypass,
+                    nanobot_max_steps=nanobot_max_steps,
+                    nanobot_timeout_seconds=nanobot_timeout_seconds,
+                    nanobot_enable_planner=nanobot_enable_planner,
+                    nanobot_enable_router=nanobot_enable_router,
+                    nanobot_gui_task_max_steps=nanobot_gui_task_max_steps,
+                    nanobot_gui_task_max_calls=nanobot_gui_task_max_calls,
                     device=device,
                     **kwargs,
                 )
@@ -426,6 +496,12 @@ def _process_task_on_env(
                     "gui_claw_path": gui_claw_path,
                     "evaluation_mode": evaluation_mode,
                     "allow_adb_bypass": allow_adb_bypass,
+                    "nanobot_max_steps": nanobot_max_steps,
+                    "nanobot_timeout_seconds": nanobot_timeout_seconds,
+                    "nanobot_enable_planner": nanobot_enable_planner,
+                    "nanobot_enable_router": nanobot_enable_router,
+                    "nanobot_gui_task_max_steps": nanobot_gui_task_max_steps,
+                    "nanobot_gui_task_max_calls": nanobot_gui_task_max_calls,
                     "mobileworld_container_name": container_name,
                     "mobileworld_device": device,
                     "mobileworld_env_url": env.base_url,
@@ -434,6 +510,7 @@ def _process_task_on_env(
                 agent = create_agent(agent_type, model_name, llm_base_url, api_key, env=env, **kwargs)
 
             task_start_time = time.time()
+            unhealthy_seen_consecutive = 0
             with adb_execution_context(container_name=container_name, device=device):
                 while True:
                     try:
@@ -451,15 +528,68 @@ def _process_task_on_env(
                         )
                         break
                     except Exception as e:
-                        if "Device is not healthy" in str(e) and retry_on_device_unhealthy > 0:
-                            logger.warning("Device is not healthy, retrying...")
-                            time.sleep(20)
+                        if "Device is not healthy" in str(e):
+                            if retry_on_device_unhealthy <= 0:
+                                logger.error(
+                                    "Device remained unhealthy after retries for task {} on {} (container={})",
+                                    task_name,
+                                    env.base_url,
+                                    container_name,
+                                )
+                                return None
                             retry_on_device_unhealthy -= 1
+                            unhealthy_seen_consecutive += 1
+                            should_recover = (
+                                env_auto_recover
+                                and bool(container_name)
+                                and unhealthy_seen_consecutive
+                                >= max(env_recover_unhealthy_threshold, 1)
+                            )
+                            if should_recover:
+                                logger.warning(
+                                    "Device unhealthy for {} consecutive attempts, restarting container {}",
+                                    unhealthy_seen_consecutive,
+                                    container_name,
+                                )
+                                restarted = _restart_backend_container(str(container_name))
+                                if restarted:
+                                    recovered = _wait_backend_healthy(
+                                        env.base_url,
+                                        device,
+                                        timeout_seconds=300,
+                                        poll_interval_seconds=5,
+                                    )
+                                    if recovered:
+                                        logger.info(
+                                            "Backend recovered after container restart: {}",
+                                            container_name,
+                                        )
+                                        unhealthy_seen_consecutive = 0
+                                        traj_logger.reset_traj()
+                                        continue
+                                    logger.error(
+                                        "Backend did not recover in time after restart: {}",
+                                        container_name,
+                                    )
+                                else:
+                                    logger.error("Container restart failed: {}", container_name)
+                                if retry_on_device_unhealthy <= 0:
+                                    logger.error(
+                                        "Device unhealthy auto-recovery exhausted for task {} on {}",
+                                        task_name,
+                                        env.base_url,
+                                    )
+                                    return None
+                            logger.warning(
+                                "Device is not healthy, retrying... remaining_retries={}",
+                                retry_on_device_unhealthy,
+                            )
+                            time.sleep(20)
                             traj_logger.reset_traj()
                             continue
-                        else:
-                            logger.exception(f"Error executing task {task_name}")
-                            return None
+
+                        logger.exception(f"Error executing task {task_name}")
+                        return None
 
             task_duration = time.time() - task_start_time
             task_success = task_score > 0.0
@@ -529,6 +659,14 @@ def run_agent_with_evaluation(
     gui_claw_path: str | None = None,
     evaluation_mode: str | None = None,
     allow_adb_bypass: bool | None = None,
+    nanobot_max_steps: int | None = None,
+    nanobot_timeout_seconds: int | None = None,
+    nanobot_enable_planner: bool | None = None,
+    nanobot_enable_router: bool | None = None,
+    nanobot_gui_task_max_steps: int | None = None,
+    nanobot_gui_task_max_calls: int | None = None,
+    env_auto_recover: bool = True,
+    env_recover_unhealthy_threshold: int = 2,
     **kwargs,
 ) -> list[dict]:
     """Run the agent and return the evaluation results.
@@ -643,6 +781,14 @@ def run_agent_with_evaluation(
                     gui_claw_path=gui_claw_path,
                     evaluation_mode=evaluation_mode,
                     allow_adb_bypass=allow_adb_bypass,
+                    nanobot_max_steps=nanobot_max_steps,
+                    nanobot_timeout_seconds=nanobot_timeout_seconds,
+                    nanobot_enable_planner=nanobot_enable_planner,
+                    nanobot_enable_router=nanobot_enable_router,
+                    nanobot_gui_task_max_steps=nanobot_gui_task_max_steps,
+                    nanobot_gui_task_max_calls=nanobot_gui_task_max_calls,
+                    env_auto_recover=env_auto_recover,
+                    env_recover_unhealthy_threshold=env_recover_unhealthy_threshold,
                     **kwargs,
                 )
                 for task_name in pending_tasks

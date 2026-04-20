@@ -69,7 +69,7 @@ def configure_parser(subparsers: argparse._SubParsersAction) -> None:
 
     aggregate_parser = benchmark_subparsers.add_parser(
         "aggregate",
-        help="Aggregate framework run roots into comparable KPI report",
+        help="Aggregate framework run roots into comparable report",
     )
     aggregate_parser.add_argument(
         "--framework-run",
@@ -81,7 +81,7 @@ def configure_parser(subparsers: argparse._SubParsersAction) -> None:
         "--success-threshold",
         type=float,
         default=0.99,
-        help="Success threshold used for leaderboard and efficiency metrics",
+        help="Success threshold used for leaderboard ranking",
     )
     aggregate_parser.add_argument("--output", required=True, help="Output JSON report path")
 

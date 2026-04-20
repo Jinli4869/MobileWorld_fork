@@ -5,8 +5,6 @@ MobileWorld can execute via registered framework adapter profiles while preservi
 ## Built-in Reference Profiles
 
 - `nanobot_opengui`: Reference adapter with optional OpenGUI judge integration.
-- `openclaw_template`: Scaffold adapter for OpenClaw onboarding.
-- `hermes_template`: Scaffold adapter for Hermes onboarding.
 
 ## Eval CLI Usage
 
@@ -46,11 +44,9 @@ Example `framework-profile.json`:
 
 `nanobot_opengui` requires `nanobot_config_path`, and mixed-mode execution should set `evaluation_mode: "mixed"` and `allow_adb_bypass: true` for stable cross-framework comparability.
 
-## Adapter Scaffold TODOs
+## Adding New Adapters
 
-`openclaw_template` and `hermes_template` intentionally return a safe `wait` action until real framework wiring is implemented.
-
-When implementing real adapters:
+When implementing a new framework adapter:
 
 1. Replace scaffold prediction/action logic in `step`.
 2. Map framework-native actions to canonical `JSONAction` payloads.
