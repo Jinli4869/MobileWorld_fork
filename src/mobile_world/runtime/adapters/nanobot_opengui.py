@@ -1868,12 +1868,13 @@ class NanobotOpenGUIAdapter(FrameworkAdapter):
             # )
             instruction = (
                 # "Do not use plain `adb`; use `mw_adb` for device control.\n"
-                "You can use a few mw_adb and web_search or any other tools in the previous steps to get task done or information collect.\n"
+                # "You can use a few mw_adb and web_search or any other tools in the previous steps to get task done or information collect.\n"
                 # "But you could only use gui_task for only 5 times, so dont break the task too piecemeal.\n"
-                "Better cut the tasks into different application tasks and keep the sub-task as big as possible.\n"
+                # "Better cut the tasks into different application tasks and keep the sub-task as big as possible.\n"
                 "Better use gui_task to complete gui operations rather than mw_adb, and use read_file to read trajectory screenshot for information gathering."
                 "Better use the original task goal for the gui_task tool, also you could use part of it, dont use a very simplified description for the gui_task tool.\n"
                 f"Task Goal: {task_goal}"
+                # f"{task_goal}"
             )
             if mw_adb_wrapper is not None:
                 instruction += (
