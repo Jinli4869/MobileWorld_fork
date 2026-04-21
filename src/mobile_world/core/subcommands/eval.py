@@ -7,7 +7,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from loguru import loggerq
+from loguru import logger
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
