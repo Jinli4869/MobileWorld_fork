@@ -7,13 +7,163 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from loguru import logger
+from loguru import loggerq
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
+from mobile_world.runtime.client import scan_finished_tasks
+
 from ..runner import run_agent_with_evaluation
+
+
+def generate_pass_k_report(
+    log_file_root: str,
+    k: int,
+    total_duration: float,
+    agent_type: str,
+    model_name: str | None,
+) -> dict:
+    """Generate a pass@k report by aggregating results across k independent runs.
+
+    Reads result.txt files from log_file_root/run_{i}/ for i in 1..k.
+    A task "passes" at k if it scored > 0.99 in at least one run.
+    """
+    all_task_names: set[str] = set()
+    per_run_results: list[dict[str, float]] = []
+
+    for i in range(1, k + 1):
+        run_log_root = os.path.join(log_file_root, f"run_{i}")
+        task_names, scores = scan_finished_tasks(run_log_root)
+        run_dict = dict(zip(task_names, scores))
+        per_run_results.append(run_dict)
+        all_task_names.update(task_names)
+
+    sorted_tasks = sorted(all_task_names)
+    total_tasks = len(sorted_tasks)
+
+    tasks_report = {}
+    tasks_passed = 0
+    per_run_success_counts = [0] * k
+
+    for task_name in sorted_tasks:
+        scores = []
+        for i in range(k):
+            score = per_run_results[i].get(task_name, 0.0)
+            scores.append(score)
+            if score > 0.99:
+                per_run_success_counts[i] += 1
+
+        passed_runs = sum(1 for s in scores if s > 0.99)
+        pass_at_k = 1 if passed_runs > 0 else 0
+        if pass_at_k:
+            tasks_passed += 1
+
+        tasks_report[task_name] = {
+            "pass_at_k": pass_at_k,
+            "passed_runs": passed_runs,
+            "total_runs": k,
+            "scores": scores,
+        }
+
+    per_run_success_rates = [
+        count / total_tasks if total_tasks > 0 else 0.0
+        for count in per_run_success_counts
+    ]
+
+    return {
+        "summary": {
+            "k": k,
+            "total_tasks": total_tasks,
+            "tasks_passed_at_k": tasks_passed,
+            "pass_at_k_rate": tasks_passed / total_tasks if total_tasks > 0 else 0.0,
+            "per_run_success_rates": per_run_success_rates,
+            "total_duration_seconds": total_duration,
+        },
+        "metadata": {
+            "agent_type": agent_type,
+            "model_name": model_name,
+            "timestamp": datetime.now().isoformat(),
+            "log_file_root": log_file_root,
+        },
+        "tasks": tasks_report,
+    }
+
+
+def _print_pass_k_report(report: dict, report_file: Path) -> None:
+    """Print a pass@k report to the console using Rich."""
+    console = Console()
+    summary = report["summary"]
+    k = summary["k"]
+
+    summary_text = Text()
+    summary_text.append(f"Pass@{k} Evaluation Complete!\n\n", style="bold green")
+    summary_text.append(
+        f"Pass@{k} Rate: {summary['pass_at_k_rate']:.1%}\n", style="cyan"
+    )
+    summary_text.append(
+        f"Tasks Passed: {summary['tasks_passed_at_k']}/{summary['total_tasks']}\n",
+        style="magenta",
+    )
+    per_run_strs = [f"Run {i+1}: {r:.1%}" for i, r in enumerate(summary["per_run_success_rates"])]
+    summary_text.append(f"Per-Run Success Rates: {', '.join(per_run_strs)}\n", style="yellow")
+    summary_text.append(
+        f"Total Duration: {summary['total_duration_seconds']:.1f} seconds\n",
+        style="yellow",
+    )
+
+    console.print(Panel(
+        summary_text,
+        title=f"[bold blue]Pass@{k} Evaluation Summary",
+        border_style="blue",
+        padding=(1, 2),
+    ))
+
+    metadata = report["metadata"]
+    metadata_text = Text()
+    metadata_text.append(f"Agent Type: {metadata['agent_type']}\n", style="green")
+    metadata_text.append(f"Model: {metadata['model_name'] or 'N/A'}\n", style="green")
+    metadata_text.append(f"Timestamp: {metadata['timestamp']}\n", style="green")
+    metadata_text.append(f"Log Root: {metadata['log_file_root']}\n", style="green")
+
+    console.print(Panel(
+        metadata_text, title="[bold]Configuration", border_style="green", padding=(1, 2)
+    ))
+
+    tasks = report["tasks"]
+    if tasks:
+        results_table = Table(
+            title=f"[bold]Pass@{k} Task Results",
+            show_header=True,
+            header_style="bold magenta",
+        )
+        results_table.add_column("Task", style="cyan", width=30)
+        results_table.add_column(f"Pass@{k}", justify="center")
+        results_table.add_column("Passed Runs", justify="center")
+        for i in range(k):
+            results_table.add_column(f"Run {i+1}", justify="center")
+
+        for task_name, task_data in tasks.items():
+            pass_str = "[green]Yes[/green]" if task_data["pass_at_k"] else "[red]No[/red]"
+            passed_str = f"{task_data['passed_runs']}/{task_data['total_runs']}"
+            run_cells = []
+            for score in task_data["scores"]:
+                if score > 0.99:
+                    run_cells.append("[green]1.0[/green]")
+                else:
+                    run_cells.append(f"[red]{score:.1f}[/red]")
+            results_table.add_row(task_name, pass_str, passed_str, *run_cells)
+
+        console.print(results_table)
+
+    files_text = Text()
+    files_text.append(f"Results JSON: {report_file}\n", style="blue")
+    files_text.append(f"Trajectory Logs: {metadata['log_file_root']}", style="blue")
+
+    console.print(Panel(
+        files_text, title="[bold]Output Files", border_style="cyan", padding=(1, 2)
+    ))
 
 
 def _add_common_arguments(parser: argparse.ArgumentParser) -> None:
@@ -190,11 +340,87 @@ def configure_parser(subparsers: argparse._SubParsersAction) -> None:
         action="store_true",
         help="Shuffle the order of tasks before running",
     )
+    eval_parser.add_argument(
+        "--pass-k",
+        "--pass_k",
+        dest="pass_k",
+        type=int,
+        default=1,
+        help="Number of independent runs for pass@k evaluation (default: 1, standard single run)",
+    )
+
+
+async def _execute_pass_k(
+    args: argparse.Namespace,
+    log_file_root: str,
+    final_tasks: list[str],
+    aw_urls: list[str] | None,
+    pass_k: int,
+) -> None:
+    """Execute pass@k evaluation: run the eval k times and generate aggregated report."""
+    start_time = time.time()
+
+    for i in range(1, pass_k + 1):
+        run_log_root = os.path.join(log_file_root, f"run_{i}")
+        logger.info("=== Starting pass@{} run {}/{} (log_root: {}) ===", pass_k, i, pass_k, run_log_root)
+
+        run_agent_with_evaluation(
+            agent_type=args.agent_type,
+            model_name=args.model_name,
+            llm_base_url=args.llm_base_url,
+            log_file_root=run_log_root,
+            tasks=final_tasks,
+            max_step=args.max_round or -1,
+            aw_urls=aw_urls,
+            api_key=args.api_key or os.getenv("API_KEY"),
+            executor_llm_base_url=args.executor_llm_base_url,
+            executor_model_name=args.executor_model_name,
+            executor_agent_class=args.executor_agent_class,
+            device=args.device or "emulator-5554",
+            step_wait_time=args.step_wait_time or 1.0,
+            suite_family=args.suite_family or "mobile_world",
+            env_name_prefix=args.env_name_prefix,
+            env_image=args.env_image,
+            dry_run=args.dry_run,
+            enable_mcp=args.enable_mcp,
+            enable_user_interaction=args.enable_user_interaction,
+            max_concurrency=args.max_concurrency,
+            shuffle_tasks=args.shuffle_tasks,
+            scale_factor=getattr(args, "scale_factor", 1000),
+            auto_retry=args.auto_retry,
+        )
+
+        logger.info("=== Completed pass@{} run {}/{} ===", pass_k, i, pass_k)
+
+    total_duration = time.time() - start_time
+
+    report = generate_pass_k_report(
+        log_file_root=log_file_root,
+        k=pass_k,
+        total_duration=total_duration,
+        agent_type=args.agent_type,
+        model_name=args.model_name,
+    )
+
+    output_path = Path(log_file_root)
+    output_path.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    report_file = output_path / f"pass_k_report_{timestamp}.json"
+
+    with open(report_file, "w") as f:
+        json.dump(report, f, indent=2, ensure_ascii=False)
+
+    _print_pass_k_report(report, report_file)
 
 
 async def execute(args: argparse.Namespace) -> None:
     """Execute the eval command."""
     log_file_root = args.log_file_root or args.output or "./traj_logs"
+
+    pass_k = getattr(args, "pass_k", 1)
+    if pass_k < 1:
+        logger.error("--pass-k must be >= 1, got {}", pass_k)
+        return
 
     # Check if running all tasks
     run_all_tasks = args.task and args.task.upper() == "ALL"
@@ -208,6 +434,10 @@ async def execute(args: argparse.Namespace) -> None:
 
     # Parse aw_host URLs - if None, will auto-discover; if provided, split by comma
     aw_urls = None if args.aw_host is None else args.aw_host.split(",")
+
+    if pass_k > 1:
+        await _execute_pass_k(args, log_file_root, final_tasks, aw_urls, pass_k)
+        return
 
     task_results, task_list_with_no_results = run_agent_with_evaluation(
         agent_type=args.agent_type,
