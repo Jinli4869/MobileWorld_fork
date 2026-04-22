@@ -65,6 +65,33 @@ def pil_to_base64(image) -> str:
     return base64.b64encode(buffer.getvalue()).decode("utf-8")
 
 
+def pil_adaptive_resize(
+    image: Image.Image, max_dimension: int = 2576
+) -> tuple[Image.Image, float, float]:
+    """
+    Adaptively resize image so the longest dimension does not exceed *max_dimension*.
+    Returns (resized_image, width_scale, height_scale) where the scales convert
+    resized-image pixel coordinates back to original-image pixel coordinates
+    (1.0 when no resize was needed).
+    """
+    original_width, original_height = image.size
+    max_dim = max(original_width, original_height)
+
+    if max_dim > max_dimension:
+        scale = max_dimension / max_dim
+        target_width = int(original_width * scale)
+        target_height = int(original_height * scale)
+        resized = image.resize((target_width, target_height), Image.Resampling.LANCZOS)
+        width_scale = original_width / target_width
+        height_scale = original_height / target_height
+    else:
+        resized = image
+        width_scale = 1.0
+        height_scale = 1.0
+
+    return resized, width_scale, height_scale
+
+
 def judge_scroll_direction(start_x: float, start_y: float, end_x: float, end_y: float) -> str:
     """Determine scroll direction from start to end coordinates."""
     delta_x = end_x - start_x

@@ -6,9 +6,9 @@ from typing import Any
 from loguru import logger
 
 from mobile_world.agents.base import MCPAgent
-from mobile_world.agents.utils.helpers import pil_to_base64
+from mobile_world.agents.utils.helpers import pil_adaptive_resize, pil_to_base64
 from mobile_world.agents.utils.prompts import GENERAL_E2E_PROMPT_TEMPLATE
-from mobile_world.runtime.utils.helpers import pretty_print_messages
+from mobile_world.runtime.utils.helpers import mask_api_key, pretty_print_messages
 from mobile_world.runtime.utils.models import JSONAction
 from mobile_world.runtime.utils.parsers import parse_json_markdown
 
@@ -27,6 +27,7 @@ for standard_action, aliases in ACTION_ALIASES.items():
         NORMALIZED_ACTION_MAP[alias] = standard_action
 
 CLAUDE_IMAGE_SIZE = (1280, 720)
+CLAUDE_OPUS_MAX_DIMENSION = 1280
 
 
 def normalize_action_type(action_type: str) -> str:
@@ -225,13 +226,19 @@ class GeneralE2EAgentMCP(MCPAgent):
         self.observation_type = observation_type
         self.runtime_conf = runtime_conf
         self.scale_factor = scale_factor
-        if "claude" in self.model_name.lower():
+        self._use_adaptive_resize = False
+        if "opus-4" in self.model_name.lower() or "opus_4" in self.model_name.lower():
+            self._use_adaptive_resize = True
+        elif "claude" in self.model_name.lower():
             self.scale_factor = CLAUDE_IMAGE_SIZE
-        if "k2.5" in self.model_name.lower():
+        if "kimi-k" in self.model_name.lower():
             self.scale_factor = 1
 
         logger.debug(f"Agent runtime_conf = {self.runtime_conf}")
-        logger.debug(f"Agent scale_factor = {self.scale_factor}")
+        if self._use_adaptive_resize:
+            logger.debug(f"Agent uses adaptive resize (max_dimension={CLAUDE_OPUS_MAX_DIMENSION})")
+        else:
+            logger.debug(f"Agent scale_factor = {self.scale_factor}")
 
         self.build_openai_client(self.llm_base_url, self.api_key)
         logger.debug(f"Agent base_url={self.llm_base_url} model={self.model_name}")
@@ -250,53 +257,67 @@ class GeneralE2EAgentMCP(MCPAgent):
         # Reset history when initializing with new instruction
         self.reset()
 
-    def _get_user_message(self, img_data, tool_call_res, ask_user_response_res) -> dict:
-        user_message = None
+    def _get_user_message(
+        self, img_data, tool_call_res, ask_user_response_res, instruction: str | None = None
+    ) -> dict:
+        content = []
+        if instruction is not None:
+            content.append(
+                {
+                    "type": "text",
+                    "text": instruction,
+                }
+            )
         if tool_call_res is not None:
-            user_message = {
-                "role": "user",
-                "content": [{"type": "text", "text": f"Tool call result: {tool_call_res}"}],
-            }
+            content.append(
+                {
+                    "type": "text",
+                    "text": f"Tool call result: {tool_call_res}",
+                }
+            )
         elif ask_user_response_res is not None:
-            user_message = {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "text",
-                        "text": ask_user_response_res,
-                    }
-                ],
-            }
+            content.append(
+                {
+                    "type": "text",
+                    "text": ask_user_response_res,
+                }
+            )
         else:
-            user_message = {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "image_url",
-                        "image_url": img_data,
-                    }
-                ],
-            }
-        return user_message
+            content.append(
+                {
+                    "type": "image_url",
+                    "image_url": img_data,
+                }
+            )
+        return {
+            "role": "user",
+            "content": content,
+        }
 
     def _hide_history_images(self, messages) -> list[dict]:
         num_images_used = 0
         for i in range(len(messages)):
             reverse_i = len(messages) - i - 1
-            if (
-                messages[reverse_i]["role"] == "user"
-                and messages[reverse_i]["content"][0]["type"] == "image_url"
-            ):
-                if num_images_used < self.history_n_images:
-                    encoded_string = pil_to_base64(messages[reverse_i]["content"][0]["image_url"])
-                    messages[reverse_i]["content"][0]["image_url"] = {
-                        "url": f"data:image/png;base64,{encoded_string}"
-                    }
-                    num_images_used += 1
-                else:
-                    messages[reverse_i]["content"] = [
-                        {"type": "text", "text": "(Previous turn, screen not shown)"}
-                    ]
+            if messages[reverse_i]["role"] == "user":
+                img_item_idx = None
+                for idx, content in enumerate(messages[reverse_i]["content"]):
+                    if content["type"] == "image_url":
+                        img_item_idx = idx
+                if img_item_idx is not None:
+                    if num_images_used < self.history_n_images:
+                        encoded_string = pil_to_base64(
+                            messages[reverse_i]["content"][img_item_idx]["image_url"]
+                        )
+                        messages[reverse_i]["content"][img_item_idx]["image_url"] = {
+                            "url": f"data:image/png;base64,{encoded_string}"
+                        }
+                        num_images_used += 1
+                    else:
+                        messages[reverse_i]["content"][img_item_idx] = {
+                            "type": "text",
+                            "text": "(Previous turn, screen not shown)",
+                        }
+
         return messages
 
     def predict(
@@ -313,12 +334,18 @@ class GeneralE2EAgentMCP(MCPAgent):
             Tuple of (raw_response, JSONAction)
         """
 
-        # resize for claude
         orig_width, orig_height = observation["screenshot"].size
-        if "claude" in self.model_name.lower():
+        if self._use_adaptive_resize:
+            obs_image, _, _ = pil_adaptive_resize(
+                observation["screenshot"], CLAUDE_OPUS_MAX_DIMENSION
+            )
+            active_scale_factor = obs_image.size  # (resized_w, resized_h)
+        elif "claude" in self.model_name.lower():
             obs_image = observation["screenshot"].resize(CLAUDE_IMAGE_SIZE)
+            active_scale_factor = self.scale_factor
         else:
             obs_image = observation["screenshot"]
+            active_scale_factor = self.scale_factor
         tool_call = observation.get("tool_call", None)
         ask_user_response = observation.get("ask_user_response", None)
 
@@ -332,13 +359,17 @@ class GeneralE2EAgentMCP(MCPAgent):
             {
                 "role": "system",
                 "content": GENERAL_E2E_PROMPT_TEMPLATE.render(
-                    goal=self.instruction,
                     tools="\n".join([json.dumps(tool, ensure_ascii=False) for tool in self.tools]),
-                    scale_factor=self.scale_factor,
+                    scale_factor=active_scale_factor,
                 ),
             },
+            # UPDATED 2026-04-21: user instruction may get ignored by opus-4.7 occasionally,
+            # migrated user instruction from system prompt to user prompt!
             self._get_user_message(
-                self.history_images[0][0], self.history_images[0][1], self.history_images[0][2]
+                self.history_images[0][0],
+                self.history_images[0][1],
+                self.history_images[0][2],
+                instruction=self.instruction,
             ),
         ]
         for i, history_resp in enumerate(self.history_responses):
@@ -359,7 +390,7 @@ class GeneralE2EAgentMCP(MCPAgent):
         logger.debug(f"Constructed {len(messages) // 2} history turns.")
         messages = self._hide_history_images(messages)
 
-        pretty_print_messages(messages, max_messages=6)
+        pretty_print_messages(messages, max_messages=10)
         logger.debug("*" * 100)
 
         try_times = 3
@@ -383,7 +414,7 @@ class GeneralE2EAgentMCP(MCPAgent):
 
             except Exception as e:
                 logger.warning(
-                    f"Error fetching response from agent: {self.model_name}, {self.llm_base_url}, {self.api_key}"
+                    f"Error fetching response from agent: {self.model_name}, {self.llm_base_url}, {mask_api_key(self.api_key)}"
                 )
 
                 error_msg = str(e)
@@ -403,7 +434,7 @@ class GeneralE2EAgentMCP(MCPAgent):
 
         try:
             json_action_dict = parse_response_to_action(
-                action_str, orig_width, orig_height, self.scale_factor
+                action_str, orig_width, orig_height, active_scale_factor
             )
 
         except Exception as e:

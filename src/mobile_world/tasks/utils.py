@@ -75,8 +75,10 @@ if __name__ == "__main__":
 
     sys_prompt = "You are a helpful assistant."
     agent_question = "What is the capital of France?"
+    from mobile_world.runtime.utils.helpers import mask_api_key
+
     print(os.getenv("USER_AGENT_MODEL"))
-    print(os.getenv("USER_AGENT_API_KEY"))
+    print(mask_api_key(os.getenv("USER_AGENT_API_KEY")))
     print(os.getenv("USER_AGENT_BASE_URL"))
     model_config = ModelConfig(
         model_name=os.getenv("USER_AGENT_MODEL"),

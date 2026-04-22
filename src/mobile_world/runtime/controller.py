@@ -13,7 +13,9 @@ from mobile_world.runtime.utils.helpers import (
 )
 from mobile_world.runtime.utils.models import APP_DICT, COMMON_APP_MAPPER
 
-APP_LOWER_DICT = {app_name.lower(): package_name for package_name, app_name in COMMON_APP_MAPPER.items()}
+APP_LOWER_DICT = {
+    app_name.lower(): package_name for package_name, app_name in COMMON_APP_MAPPER.items()
+}
 APP_LOWER_DICT.update({k.lower(): v for k, v in APP_DICT.items()})
 
 
@@ -300,9 +302,19 @@ class AndroidController:
             raise RuntimeError("model_config is not configured. Please initialize the task first.")
 
         logger.info(f"[ASK_USER] Agent question: {agent_question}")
-        user_answer = user_agent_answer_question(
-            self.user_sys_prompt, agent_question, self.model_config, self.user_agent_chat_history
-        )
+        try:
+            user_answer = user_agent_answer_question(
+                self.user_sys_prompt,
+                agent_question,
+                self.model_config,
+                self.user_agent_chat_history,
+            )
+        except Exception as e:
+            logger.error(f"[ASK_USER] Failed to get response from LLM service: {e}")
+            raise RuntimeError(f"Failed to get user agent response from LLM service: {e}") from e
+        if not user_answer:
+            logger.error("[ASK_USER] LLM returned empty response")
+            raise RuntimeError("User agent LLM returned empty response")
         self.user_agent_chat_history.append({"role": "user", "content": agent_question})
         self.user_agent_chat_history.append({"role": "assistant", "content": user_answer})
         logger.info(f"[ASK_USER] User answer: {user_answer}")

@@ -96,12 +96,13 @@ class BaseAgent(ABC):
             try:
                 if "claude" in model:
                     kwargs["max_tokens"] = 64000
+                    del kwargs["temperature"]
 
                 if "gpt" in model.lower() or "o1" in model.lower():
                     if "max_tokens" in kwargs:
                         kwargs["max_completion_tokens"] = kwargs.pop("max_tokens")
 
-                if "k2.5" in model.lower():
+                if "kimi-k" in model.lower():
                     kwargs["extra_body"] = {"enable_thinking": True}
 
                 response = self.openai_client.chat.completions.create(
@@ -114,7 +115,7 @@ class BaseAgent(ABC):
                 final_content = response.choices[0].message.content.strip()
                 # for k2.5, we keep its reasoning_content
                 if (
-                    "k2.5" in model.lower()
+                    "kimi-k" in model.lower()
                     and hasattr(response.choices[0].message, "reasoning_content")
                     and response.choices[0].message.reasoning_content
                 ):

@@ -27,7 +27,9 @@ Respond with EXACT JSON format for one of these actions:
 Note:
 - The coordinate is the center of the element to be clicked/long-pressed/dragged.
 - x, y are coordinates in the screen, the origin is the top-left corner of the screen.
-- x, y are numbers, the range is normalized to [0, {{ scale_factor }}].
+{% if scale_factor is iterable and scale_factor is not string %}- x, y are pixel coordinates on the screen image (width={{ scale_factor[0] }}, height={{ scale_factor[1] }}).
+{% else %}- x, y are numbers, the range is normalized to [0, {{ scale_factor }}].
+{% endif %}
 
 # Execution Principles
 1. Communication Rule:
@@ -82,9 +84,5 @@ Action: {"action_type": "mcp", "action_json": tool_args_obj, "action_name": "mcp
 # Available MCP Tools
 {{ tools }}
 
-{% endif -%}
-
-# User Goal
-{{ goal }}
-""".strip()
+{% endif -%}""".strip()
 )

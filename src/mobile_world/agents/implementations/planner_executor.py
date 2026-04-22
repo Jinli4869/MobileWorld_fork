@@ -5,6 +5,7 @@ from typing import Any
 from loguru import logger
 
 from mobile_world.agents.base import MCPAgent
+from mobile_world.runtime.utils.helpers import mask_api_key
 from mobile_world.agents.grounding import GROUNDING_MODELS
 from mobile_world.agents.utils.helpers import pil_to_base64
 from mobile_world.agents.utils.prompts import PLANNER_EXECUTOR_PROMPT_TEMPLATE
@@ -308,7 +309,7 @@ class PlannerExecutorAgentMCP(MCPAgent):
 
             except Exception as e:
                 logger.warning(
-                    f"Error fetching response from planner: {self.model_name}, {self.llm_base_url}, {self.api_key}"
+                    f"Error fetching response from planner: {self.model_name}, {self.llm_base_url}, {mask_api_key(self.api_key)}"
                 )
 
                 error_msg = str(e)

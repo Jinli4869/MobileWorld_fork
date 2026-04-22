@@ -42,6 +42,7 @@ While maintaining the same level of rigorous, reproducible evaluation as Android
 </p>
 
 ## 📢 Updates
+- **2026-04-22:** Added **Claude-Opus-4.7** (56.4% GUI-Only) and **Kimi-K2.6** (55.6% GUI-Only) to the [leaderboard](https://tongyi-mai.github.io/MobileWorld/#leaderboard). Trajectory viewer now available for inspecting per-task agent traces.
 - **2026-04-15: Important Fix — Mattermost Session Expiry**
     If you pulled the Docker image before this date, Mattermost task evaluations may produce **false negatives** due to expired authentication tokens in the emulator snapshot. Please **`git pull`** the latest codebase — the fix runs automatically during task initialization (no Docker image rebuild required).
 - **2026-03-20: End-to-End Frontier Model Evaluation & Real Device Support🔥**
@@ -315,6 +316,8 @@ Replace `--model_name`, `--llm_base_url`, and `--api_key` with the model and cre
 
 | Model             | Agent Type    | Coordinate System | Notes                                         |
 |-------------------|---------------|-------------------|-----------------------------------------------|
+| Claude Opus 4.7   | `general_e2e` | Absolute pixels   | 1 image in history (see leaderboard notes)    |
+| Kimi K2.6         | `general_e2e` | Relative (0–1)    |                                               |
 | Gemini 3 Pro      | `general_e2e` | Relative (0–1000) | Normalized coordinates                        |
 | Claude Sonnet 4.5 | `general_e2e` | Absolute pixels   | Requires image resize to 1280×720             |
 | Qwen-3.5          | `general_e2e` | Relative (0–1000) |                                               |
@@ -406,14 +409,15 @@ We also thank all the open-source contributors!
 If you find MobileWorld useful in your research, please cite our paper:
 
 ```bibtex
-@misc{kong2025mobileworldbenchmarkingautonomousmobile,
-      title={MobileWorld: Benchmarking Autonomous Mobile Agents in Agent-User Interactive, and MCP-Augmented Environments}, 
+@inproceedings{kong2025mobileworld,
+      title={MobileWorld: Benchmarking 
+Autonomous Mobile Agents in Agent-User 
+Interactive, and MCP-Augmented 
+Environments},
       author={Quyu Kong and Xu Zhang and Zhenyu Yang and Nolan Gao and Chen Liu and Panrong Tong and Chenglin Cai and Hanzhang Zhou and Jianan Zhang and Liangyu Chen and Zhidan Liu and Steven Hoi and Yue Wang},
-      year={2025},
-      eprint={2512.19432},
-      archivePrefix={arXiv},
-      primaryClass={cs.AI},
-      url={https://arxiv.org/abs/2512.19432}, 
+      booktitle={Proceedings of the 64th Annual Meeting of the Association for Computational Linguistics (ACL)},
+      year={2026},
+      url={https://arxiv.org/abs/2512.19432},
 }
 ```
 

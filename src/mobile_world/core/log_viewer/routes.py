@@ -30,7 +30,6 @@ from mobile_world.core.log_viewer.utils import (
     get_user_trajectory_folders,
     get_user_trajectory_task_folder,
     is_user_trajectory_log,
-    is_valid_trajectory_dir,
 )
 
 
@@ -1504,17 +1503,16 @@ def register_routes(rt, base_path: str = "/", route_prefix: str = ""):
         log_root = ""
 
         if log_root_input:
-            if is_valid_trajectory_dir(log_root_input):
-                # Direct trajectory directory
-                log_root = log_root_input
-            else:
-                # Check if it's a parent directory with child trajectory dirs
-                child_dirs = get_child_trajectory_dirs(log_root_input)
-                if child_dirs and selected_subdir and selected_subdir in child_dirs:
+            # Check for child trajectory dirs first so the dropdown always
+            # appears when the path is a parent of multiple log roots, even
+            # if the parent itself looks like a valid trajectory dir (e.g. it
+            # contains a stray task folder with traj.json).
+            child_dirs = get_child_trajectory_dirs(log_root_input)
+            if child_dirs:
+                if selected_subdir and selected_subdir in child_dirs:
                     log_root = os.path.join(log_root_input, selected_subdir)
-                elif not child_dirs:
-                    # Not a valid trajectory dir and no children - still set it for display
-                    log_root = log_root_input
+            else:
+                log_root = log_root_input
 
         if log_root:
             log_root_state["log_root"] = log_root
@@ -1960,17 +1958,15 @@ def register_routes(rt, base_path: str = "/", route_prefix: str = ""):
         log_root_input = unquote(log_root_raw) if log_root_raw else ""
         selected_subdir = request.query_params.get("selected_subdir", "")
 
-        # Determine effective log_root
+        # Determine effective log_root (same logic as index handler)
         log_root = ""
         if log_root_input:
-            if is_valid_trajectory_dir(log_root_input):
-                log_root = log_root_input
-            else:
-                child_dirs = get_child_trajectory_dirs(log_root_input)
-                if child_dirs and selected_subdir and selected_subdir in child_dirs:
+            child_dirs = get_child_trajectory_dirs(log_root_input)
+            if child_dirs:
+                if selected_subdir and selected_subdir in child_dirs:
                     log_root = os.path.join(log_root_input, selected_subdir)
-                elif not child_dirs:
-                    log_root = log_root_input
+            else:
+                log_root = log_root_input
 
         if not log_root:
             return Div("No log root specified", cls="empty-state", id="refreshable-content")

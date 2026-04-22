@@ -163,6 +163,9 @@ class AndroidEnvClient:
             "message": {response.text},
         }}""")
 
+        if response.status_code != 200 and action.action_type == "ask_user":
+            raise RuntimeError(f"Step action failed (HTTP {response.status_code}): {response.text}")
+
         res = self.get_screenshot(wait_to_stabilize=True)
         ask_user_response = None
         if action.action_type == "ask_user" and response.text is not None:
@@ -175,13 +178,15 @@ class AndroidEnvClient:
             ask_user_response=ask_user_response,
         )
 
-    def get_suite_task_list(self, enable_mcp: bool = False, enable_user_interaction: bool = False) -> list[str]:
+    def get_suite_task_list(
+        self, enable_mcp: bool = False, enable_user_interaction: bool = False
+    ) -> list[str]:
         """Gets the list of tasks in the suite.
-        
+
         Args:
             enable_mcp: If True, include agent-mcp tasks. Default False excludes them.
             enable_user_interaction: If True, include agent-user-interaction tasks. Default False excludes them.
-        
+
         Returns:
             List of task names filtered by the specified criteria.
             By default (both False), returns only GUI-only tasks.
@@ -191,7 +196,7 @@ class AndroidEnvClient:
         response = requests.get(f"{self.base_url}/task/list")
         response.raise_for_status()
         task_list = response.json()
-        
+
         # Filter tasks based on tags
         filtered_tasks = []
         gui_only = []

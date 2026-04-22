@@ -38,6 +38,15 @@ class AdbResponse(BaseModel):
         return not self.__eq__(other)
 
 
+def mask_api_key(key: str | None) -> str:
+    """Mask an API key for safe logging, showing only the first 4 and last 4 characters."""
+    if not key:
+        return "<empty>"
+    if len(key) <= 8:
+        return "***"
+    return f"{key[:4]}...{key[-4:]}"
+
+
 def time_within_ten_secs(time1: str | AdbResponse, time2: str | AdbResponse):
     """Compare two time strings or AdbResponse objects to check if within 10 seconds."""
 
