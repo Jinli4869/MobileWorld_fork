@@ -12,6 +12,7 @@ from mobile_world.runtime.utils.trajectory_logger import (
     EVALUATOR_AUDIT_FILE_NAME,
     METRICS_FILE_NAME,
     SCORE_FILE_NAME,
+    SKILL_SUMMARY_FILE_NAME,
 )
 
 
@@ -55,6 +56,7 @@ class TaskRunRecord:
     evaluator_audit: dict[str, Any]
     root_dir: str
     mixed_summary: dict[str, Any] | None = None
+    skill_summary: dict[str, Any] | None = None
 
 
 @dataclass
@@ -82,10 +84,12 @@ def load_task_run_records(run_root: str) -> dict[str, TaskRunRecord]:
         metrics_path = task_dir / METRICS_FILE_NAME
         audit_path = task_dir / EVALUATOR_AUDIT_FILE_NAME
         mixed_summary_path = task_dir / "nanobot_mixed_summary.json"
+        skill_summary_path = task_dir / SKILL_SUMMARY_FILE_NAME
 
         metrics = _read_json(metrics_path) if metrics_path.exists() else {}
         audit = _read_json(audit_path) if audit_path.exists() else {}
         mixed_summary = _read_json(mixed_summary_path) if mixed_summary_path.exists() else None
+        skill_summary = _read_json(skill_summary_path) if skill_summary_path.exists() else None
 
         records[task_dir.name] = TaskRunRecord(
             task_name=task_dir.name,
@@ -94,6 +98,7 @@ def load_task_run_records(run_root: str) -> dict[str, TaskRunRecord]:
             evaluator_audit=audit,
             root_dir=str(task_dir),
             mixed_summary=mixed_summary,
+            skill_summary=skill_summary,
         )
     return records
 
@@ -130,6 +135,16 @@ def _framework_summary(
     success_threshold: float,
 ) -> dict[str, Any]:
     scores: list[float] = []
+    predict_latency_values: list[float] = []
+    completion_per_step_values: list[float] = []
+    completion_totals: list[float] = []
+    skill_hit_completion_per_step: list[float] = []
+    skill_miss_completion_per_step: list[float] = []
+    skill_hit_predict_latency: list[float] = []
+    skill_miss_predict_latency: list[float] = []
+    base_agent_completion_tokens = 0
+    skill_reuser_completion_tokens = 0
+    skill_extractor_completion_tokens = 0
     successes = 0
 
     for task_name in task_names:
@@ -142,6 +157,36 @@ def _framework_summary(
         is_success = score >= success_threshold
         if is_success:
             successes += 1
+        latency = record.metrics.get("latency", {}) if isinstance(record.metrics, dict) else {}
+        token_usage = record.metrics.get("token_usage", {}) if isinstance(record.metrics, dict) else {}
+        avg_predict = latency.get("avg_predict_latency_ms_per_step")
+        avg_completion = token_usage.get("avg_completion_tokens_per_step")
+        total_completion = token_usage.get("total", {}).get("completion_tokens") if isinstance(token_usage.get("total"), dict) else None
+        if isinstance(avg_predict, (int, float)):
+            predict_latency_values.append(float(avg_predict))
+        if isinstance(avg_completion, (int, float)):
+            completion_per_step_values.append(float(avg_completion))
+            if record.skill_summary and record.skill_summary.get("skill_hit"):
+                skill_hit_completion_per_step.append(float(avg_completion))
+            else:
+                skill_miss_completion_per_step.append(float(avg_completion))
+        if isinstance(avg_predict, (int, float)):
+            if record.skill_summary and record.skill_summary.get("skill_hit"):
+                skill_hit_predict_latency.append(float(avg_predict))
+            else:
+                skill_miss_predict_latency.append(float(avg_predict))
+        if isinstance(total_completion, (int, float)):
+            completion_totals.append(float(total_completion))
+        if isinstance(record.skill_summary, dict):
+            base_agent_completion_tokens += int(
+                record.skill_summary.get("base_agent_completion_tokens", 0) or 0
+            )
+            skill_reuser_completion_tokens += int(
+                record.skill_summary.get("skill_reuser_completion_tokens", 0) or 0
+            )
+            skill_extractor_completion_tokens += int(
+                record.skill_summary.get("skill_extractor_completion_tokens", 0) or 0
+            )
 
     task_count = len(task_names)
     success_rate = (successes / task_count) if task_count else 0.0
@@ -152,6 +197,26 @@ def _framework_summary(
         "successes": successes,
         "success_rate": round(success_rate, 6),
         "avg_score": _mean(scores),
+        "avg_predict_latency_ms_per_step": _mean(predict_latency_values),
+        "avg_completion_tokens_per_step": _mean(completion_per_step_values),
+        "skill_reuse_breakdown": {
+            "reuse": {
+                "tasks": len(skill_hit_completion_per_step) or len(skill_hit_predict_latency),
+                "avg_predict_latency_ms_per_step": _mean(skill_hit_predict_latency),
+                "avg_completion_tokens_per_step": _mean(skill_hit_completion_per_step),
+            },
+            "no_reuse": {
+                "tasks": len(skill_miss_completion_per_step) or len(skill_miss_predict_latency),
+                "avg_predict_latency_ms_per_step": _mean(skill_miss_predict_latency),
+                "avg_completion_tokens_per_step": _mean(skill_miss_completion_per_step),
+            },
+        },
+        "completion_tokens_per_successful_task": round(sum(completion_totals) / successes, 6)
+        if successes
+        else None,
+        "base_agent_completion_tokens": base_agent_completion_tokens,
+        "skill_reuser_completion_tokens": skill_reuser_completion_tokens,
+        "skill_extractor_completion_tokens": skill_extractor_completion_tokens,
     }
 
 

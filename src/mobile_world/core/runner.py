@@ -44,6 +44,10 @@ from mobile_world.runtime.utils.trajectory_logger import METRICS_FILE_NAME, Traj
 load_dotenv()
 
 
+def _agent_supports_mcp(agent: BaseAgent | None) -> bool:
+    return isinstance(agent, MCPAgent) or isinstance(getattr(agent, "base_agent", None), MCPAgent)
+
+
 def _is_backend_healthy(env_url: str, device: str) -> bool:
     try:
         response = requests.get(f"{env_url}/health", timeout=5)
@@ -109,6 +113,7 @@ def _execute_single_task(
     evaluator: BaseEvaluator | None = None,
     framework_adapter: FrameworkAdapter | None = None,
     framework_options: dict | None = None,
+    task_metadata: dict | None = None,
 ) -> tuple[int, float]:
     """Execute a single task and return the number of steps and score.
 
@@ -118,7 +123,7 @@ def _execute_single_task(
 
     logger.debug(f"max_step: {max_step}")
 
-    if enable_mcp and framework_adapter is None and not isinstance(agent, MCPAgent):
+    if enable_mcp and framework_adapter is None and not _agent_supports_mcp(agent):
         logger.error(
             "MCP is enabled but agent type is not a MCP agent. Please use a MCP agent type."
         )
@@ -166,6 +171,9 @@ def _execute_single_task(
             "screenshot": obs.screenshot,
             "tool_call": obs.tool_call,
             "ask_user_response": obs.ask_user_response,
+            "current_activity": getattr(obs, "current_activity", None),
+            "foreground_package": getattr(obs, "foreground_package", None),
+            "foreground_app": getattr(obs, "foreground_app", None),
         }
         if framework_adapter is not None:
             step_result = framework_adapter.step(
@@ -195,7 +203,14 @@ def _execute_single_task(
             prediction, action = agent.predict(observation_payload)  # for backward compatibility
             action_payload = action.model_dump(exclude_none=True)
             total_token_usage = agent.get_total_token_usage()
+            agent_step_info = (
+                agent.consume_last_step_info()
+                if hasattr(agent, "consume_last_step_info")
+                else {}
+            )
         prediction_done_at = time.perf_counter()
+        if framework_adapter is not None:
+            agent_step_info = {}
         if total_token_usage is None:
             total_token_usage = {
                 "completion_tokens": 0,
@@ -209,7 +224,16 @@ def _execute_single_task(
             step_started_at=step_started_at,
             prediction_done_at=prediction_done_at,
             total_usage=total_token_usage,
+            phase=agent_step_info.get("skill_phase"),
         )
+        step_info = {
+            "step_token_usage": step_preview["token_usage_step"],
+            "predict_latency_ms": step_preview["predict_latency_ms"],
+            "current_activity": getattr(obs, "current_activity", None),
+            "foreground_package": getattr(obs, "foreground_package", None),
+            "foreground_app": getattr(obs, "foreground_app", None),
+            **agent_step_info,
+        }
         traj_logger.log_traj(
             task_name,
             task_goal,
@@ -218,10 +242,7 @@ def _execute_single_task(
             action_payload,
             obs,
             total_token_usage,
-            step_info={
-                "step_token_usage": step_preview["token_usage_step"],
-                "predict_latency_ms": step_preview["predict_latency_ms"],
-            },
+            step_info=step_info,
         )
         if prediction is None:
             logger.warning(f"Agent prediction failed in step {step}")
@@ -317,6 +338,22 @@ def _execute_single_task(
         evaluator_name=evaluation_result.evaluator_name,
         evidence_refs=[ref.model_dump() for ref in evaluation_result.evidence_refs],
     )
+    if agent is not None and hasattr(agent, "finalize_task"):
+        try:
+            skill_summary = agent.finalize_task(
+                task_name=task_name,
+                task_goal=task_goal,
+                score=evaluation_result.score,
+                reason=evaluation_result.reason,
+                artifact_paths=traj_logger.artifact_paths(),
+                metrics=metrics_summary,
+                task_metadata=task_metadata or {},
+                success_threshold=0.99,
+            )
+            if isinstance(skill_summary, dict):
+                traj_logger.log_skill_summary(skill_summary)
+        except Exception:
+            logger.exception("Skill finalize hook failed for task {}", task_name)
     if framework_adapter is not None:
         finalize_result = framework_adapter.finalize(
             AdapterFinalizeInput(
@@ -371,6 +408,7 @@ def _process_task_on_env(
     nanobot_enable_router: bool | None = None,
     nanobot_gui_task_max_steps: int | None = None,
     nanobot_gui_task_max_calls: int | None = None,
+    skill_config: dict | None = None,
     env_auto_recover: bool = True,
     env_recover_unhealthy_threshold: int = 2,
     device: str = "emulator-5554",
@@ -422,6 +460,7 @@ def _process_task_on_env(
                 ]
 
             task_tags: list[str] = []
+            task_metadata: dict = {}
             try:
                 task_metadata = env.get_task_metadata(task_type=task_name)
                 task_tags = task_metadata.get("tags", [])
@@ -507,7 +546,15 @@ def _process_task_on_env(
                     "mobileworld_env_url": env.base_url,
                 }
             else:
-                agent = create_agent(agent_type, model_name, llm_base_url, api_key, env=env, **kwargs)
+                agent = create_agent(
+                    agent_type,
+                    model_name,
+                    llm_base_url,
+                    api_key,
+                    env=env,
+                    skill_config=skill_config,
+                    **kwargs,
+                )
 
             task_start_time = time.time()
             unhealthy_seen_consecutive = 0
@@ -525,6 +572,7 @@ def _process_task_on_env(
                             evaluator=evaluator,
                             framework_adapter=framework_adapter,
                             framework_options=framework_options,
+                            task_metadata=task_metadata,
                         )
                         break
                     except Exception as e:
@@ -665,6 +713,7 @@ def run_agent_with_evaluation(
     nanobot_enable_router: bool | None = None,
     nanobot_gui_task_max_steps: int | None = None,
     nanobot_gui_task_max_calls: int | None = None,
+    skill_config: dict | None = None,
     env_auto_recover: bool = True,
     env_recover_unhealthy_threshold: int = 2,
     **kwargs,
@@ -787,6 +836,7 @@ def run_agent_with_evaluation(
                     nanobot_enable_router=nanobot_enable_router,
                     nanobot_gui_task_max_steps=nanobot_gui_task_max_steps,
                     nanobot_gui_task_max_calls=nanobot_gui_task_max_calls,
+                    skill_config=skill_config,
                     env_auto_recover=env_auto_recover,
                     env_recover_unhealthy_threshold=env_recover_unhealthy_threshold,
                     **kwargs,

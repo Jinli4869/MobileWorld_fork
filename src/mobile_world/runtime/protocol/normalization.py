@@ -44,6 +44,9 @@ def normalize_observation(observation: Any) -> dict[str, Any]:
     return {
         "ask_user_response": ask_user_response,
         "tool_call": _ensure_json_serializable(tool_call),
+        "current_activity": getattr(observation, "current_activity", None),
+        "foreground_package": getattr(observation, "foreground_package", None),
+        "foreground_app": getattr(observation, "foreground_app", None),
     }
 
 
@@ -64,6 +67,9 @@ def normalize_step_event(
     normalized_obs = normalize_observation(observation)
     normalized_usage = _ensure_json_serializable(token_usage) if token_usage else None
     normalized_info = _ensure_json_serializable(info) if info else {}
+    for key in ("current_activity", "foreground_package", "foreground_app"):
+        if normalized_info.get(key) is None:
+            normalized_info[key] = normalized_obs.get(key)
     return CanonicalStepEvent(
         task_name=task_name,
         task_goal=task_goal,

@@ -81,6 +81,7 @@ CANONICAL_META_FILE_NAME = "traj.meta.json"
 SCORE_FILE_NAME = "result.txt"
 EVALUATOR_AUDIT_FILE_NAME = "evaluator_audit.json"
 METRICS_FILE_NAME = "metrics.json"
+SKILL_SUMMARY_FILE_NAME = "mobileworld_skill_summary.json"
 RUN_METRICS_FILE_NAME = METRICS_FILE_NAME
 
 
@@ -248,6 +249,7 @@ class TrajLogger:
             "score_path": os.path.join(self.log_file_dir, self.score_file_name),
             "evaluator_audit_path": os.path.join(self.log_file_dir, self.evaluator_audit_file_name),
             "metrics_path": os.path.join(self.log_file_dir, self.metrics_file_name),
+            "skill_summary_path": os.path.join(self.log_file_dir, SKILL_SUMMARY_FILE_NAME),
         }
 
     def log_traj(
@@ -278,6 +280,9 @@ class TrajLogger:
                 "action": action,
                 "ask_user_response": obs.ask_user_response,
                 "tool_call": obs.tool_call,
+                "current_activity": obs.current_activity,
+                "foreground_package": obs.foreground_package,
+                "foreground_app": obs.foreground_app,
                 "step_info": step_info or {},
             }
         )
@@ -553,6 +558,36 @@ class TrajLogger:
                 "type": "adapter_artifacts",
                 "schema_version": "1.0.0",
                 "artifacts": artifacts,
+            }
+        )
+
+    def log_skill_summary(self, summary: dict) -> None:
+        """Persist MobileWorld-native skill diagnostics."""
+        task_id = "0"
+        summary_path = os.path.join(self.log_file_dir, SKILL_SUMMARY_FILE_NAME)
+        with open(summary_path, "w", encoding="utf-8") as f:
+            json.dump(summary, f, ensure_ascii=False, indent=4)
+
+        legacy_path = os.path.join(self.log_file_dir, self.log_file_name)
+        legacy = self._read_json_or_default(legacy_path, default={})
+        if task_id not in legacy:
+            legacy[task_id] = {"tools": self.tools, "traj": []}
+        legacy[task_id]["mobileworld_skill_summary"] = summary
+        with open(legacy_path, "w", encoding="utf-8") as f:
+            json.dump(legacy, f, ensure_ascii=False, indent=4)
+
+        _, meta_path = self._canonical_paths()
+        meta = self._read_json_or_default(meta_path, default={})
+        meta["mobileworld_skill_summary"] = summary
+        with open(meta_path, "w", encoding="utf-8") as f:
+            json.dump(meta, f, ensure_ascii=False, indent=4)
+
+        self._ensure_runtime_header()
+        self._append_canonical_event(
+            {
+                "type": "mobileworld_skill_summary",
+                "schema_version": "1.0.0",
+                "summary": summary,
             }
         )
 

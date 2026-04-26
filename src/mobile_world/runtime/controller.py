@@ -1,5 +1,6 @@
 import base64
 import os
+import re
 import shlex
 import time
 from datetime import datetime
@@ -15,6 +16,9 @@ from mobile_world.runtime.utils.models import APP_DICT, COMMON_APP_MAPPER
 
 APP_LOWER_DICT = {app_name.lower(): package_name for package_name, app_name in COMMON_APP_MAPPER.items()}
 APP_LOWER_DICT.update({k.lower(): v for k, v in APP_DICT.items()})
+PACKAGE_TO_APP = {package_name: app_name for package_name, app_name in COMMON_APP_MAPPER.items()}
+for app_name, package_name in APP_DICT.items():
+    PACKAGE_TO_APP.setdefault(package_name, app_name)
 
 
 class AndroidController:
@@ -133,19 +137,34 @@ class AndroidController:
         return result
 
     def get_current_activity(self):
-        adb_command = "adb -s {device} shell dumpsys window | grep mCurrentFocus | awk -F '/' '{print $1}' | awk '{print $NF}'"
-        adb_command = adb_command.replace("{device}", self.device)
+        adb_command = (
+            f"adb -s {self.device} shell dumpsys window "
+            "| grep -E 'mCurrentFocus|mFocusedApp' | head -n 1"
+        )
         result = execute_adb(adb_command)
-        if result.success:
-            return result.output
-        return 0
+        if not result.success:
+            return ""
+        match = re.search(r"([A-Za-z0-9_.$]+)/([A-Za-z0-9_.$]+)", result.output)
+        if match:
+            return match.group(0)
+        return result.output.strip()
+
+    def get_foreground_package(self, activity: str | None = None):
+        activity = activity if activity is not None else self.get_current_activity()
+        if not activity:
+            return ""
+        if "/" in activity:
+            return activity.split("/", 1)[0].strip()
+        return activity.strip()
+
+    def get_foreground_app(self, package_name: str | None = None):
+        package_name = package_name if package_name is not None else self.get_foreground_package()
+        if not package_name:
+            return ""
+        return PACKAGE_TO_APP.get(package_name, package_name)
 
     def get_current_app(self):
-        activity = self.get_current_activity()
-        app = activity.split(".")[-1]
-        if not app:
-            return ""
-        return app
+        return self.get_foreground_app()
 
     def back(self) -> AdbResponse:
         adb_command = f"adb -s {self.device} shell input keyevent KEYCODE_BACK"

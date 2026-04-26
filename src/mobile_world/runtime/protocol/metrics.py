@@ -60,6 +60,7 @@ def _delta_usage(current: dict[str, int], previous: dict[str, int]) -> dict[str,
 class StepMetric:
     step: int
     action_type: str | None
+    phase: str | None
     predict_latency_ms: float
     step_latency_ms: float
     token_usage_step: dict[str, int]
@@ -74,6 +75,7 @@ class StepMetric:
         return {
             "step": self.step,
             "action_type": self.action_type,
+            "phase": self.phase,
             "predict_latency_ms": self.predict_latency_ms,
             "step_latency_ms": self.step_latency_ms,
             "token_usage_step": self.token_usage_step,
@@ -106,6 +108,7 @@ class MetricsCollector:
         step_started_at: float,
         prediction_done_at: float,
         total_usage: dict[str, int] | None,
+        phase: str | None = None,
     ) -> dict[str, Any]:
         current_total = _normalize_usage(total_usage)
         step_usage = _delta_usage(current_total, self._last_total_usage)
@@ -120,6 +123,7 @@ class MetricsCollector:
         return {
             "step": step,
             "action_type": action_type,
+            "phase": phase,
             "step_started_at": step_started_at,
             "predict_latency_ms": predict_latency_ms,
             "token_usage_step": step_usage,
@@ -143,6 +147,7 @@ class MetricsCollector:
         metric = StepMetric(
             step=step_preview["step"],
             action_type=step_preview["action_type"],
+            phase=step_preview.get("phase"),
             predict_latency_ms=step_preview["predict_latency_ms"],
             step_latency_ms=step_latency_ms,
             token_usage_step=step_preview["token_usage_step"],
@@ -161,6 +166,10 @@ class MetricsCollector:
         total_steps = len(self._steps)
         total_usage = self._last_total_usage
         per_step_total_tokens = [item.token_usage_step["total_tokens"] for item in self._steps]
+        per_step_completion_tokens = [
+            item.token_usage_step["completion_tokens"] for item in self._steps
+        ]
+        predict_latencies = [item.predict_latency_ms for item in self._steps]
         step_latencies = [item.step_latency_ms for item in self._steps]
         tool_latencies = [item.tool_latency_ms for item in self._steps if item.tool_latency_ms is not None]
 
@@ -181,12 +190,22 @@ class MetricsCollector:
         token_usage_summary = {
             "total": total_usage,
             "per_step_total_tokens": per_step_total_tokens,
+            "per_step_completion_tokens": per_step_completion_tokens,
             "avg_total_tokens_per_step": round(sum(per_step_total_tokens) / total_steps, 3)
+            if total_steps
+            else 0.0,
+            "avg_completion_tokens_per_step": round(
+                sum(per_step_completion_tokens) / total_steps, 3
+            )
             if total_steps
             else 0.0,
             "source": "native" if total_usage["total_tokens"] > 0 else "unavailable",
         }
+        skill_phase_metrics = self._phase_metrics()
         latency_summary = {
+            "avg_predict_latency_ms_per_step": round(sum(predict_latencies) / total_steps, 3)
+            if total_steps
+            else 0.0,
             "ttft_ms": ttft_ms,
             "ttfa_ms": ttfa_ms,
             "tts_ms": tts_ms,
@@ -202,6 +221,8 @@ class MetricsCollector:
                 "p95": _percentile(tool_latencies, 0.95),
             },
         }
+        if skill_phase_metrics:
+            latency_summary["skill_phase_metrics"] = skill_phase_metrics
         reliability_summary = {
             "total_steps": total_steps,
             "tool_calls": tool_calls,
@@ -220,6 +241,8 @@ class MetricsCollector:
             "cost": {"cost_per_success": None, "source": "unavailable"},
             "per_step": [item.as_dict() for item in self._steps],
         }
+        if skill_phase_metrics:
+            summary["skill_phase_metrics"] = skill_phase_metrics
         event = normalize_metrics_event(
             task_name=self.task_name,
             run_id=self.run_id,
@@ -231,3 +254,28 @@ class MetricsCollector:
             info={"step_count": total_steps},
         )
         return summary, event
+
+    def _phase_metrics(self) -> dict[str, dict[str, Any]]:
+        grouped: dict[str, list[StepMetric]] = {}
+        for item in self._steps:
+            if not item.phase:
+                continue
+            grouped.setdefault(item.phase, []).append(item)
+        metrics: dict[str, dict[str, Any]] = {}
+        for phase, items in grouped.items():
+            completion_tokens = [
+                item.token_usage_step["completion_tokens"] for item in items
+            ]
+            predict_latencies = [item.predict_latency_ms for item in items]
+            metrics[phase] = {
+                "steps": len(items),
+                "avg_predict_latency_ms": round(sum(predict_latencies) / len(items), 3)
+                if items
+                else 0.0,
+                "avg_completion_tokens_per_step": round(
+                    sum(completion_tokens) / len(items), 3
+                )
+                if items
+                else 0.0,
+            }
+        return metrics

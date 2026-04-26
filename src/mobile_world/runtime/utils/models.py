@@ -486,6 +486,9 @@ class Observation(BaseModel):
     accessibility_tree: Any = None
     ask_user_response: str | None = None
     tool_call: Any | None = None
+    current_activity: str | None = None
+    foreground_package: str | None = None
+    foreground_app: str | None = None
 
 
 class TokenUsage(BaseModel):

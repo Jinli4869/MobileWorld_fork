@@ -1,0 +1,11 @@
+{
+  "enabled": true,
+  "mode": "reuse_and_learn",
+  "store_root": "./traj_logs/mobileworld_skills",
+  "extract_skills": true,
+  "extract_failed_skills": true,
+  "skill_threshold": 0.6,
+  "top_k": 5,
+  "llm_judge": false,
+  "cleanup_failure_streak": 3
+}

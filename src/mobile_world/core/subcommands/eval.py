@@ -117,6 +117,8 @@ def _write_run_manifest(
     nanobot_enable_router: bool | None,
     env_auto_recover: bool,
     env_recover_unhealthy_threshold: int,
+    skill_config_path: str | None,
+    skill_config: dict | None,
 ) -> Path:
     output_root = Path(run_root).expanduser()
     output_root.mkdir(parents=True, exist_ok=True)
@@ -136,6 +138,7 @@ def _write_run_manifest(
         "nanobot_enable_router": nanobot_enable_router,
         "env_auto_recover": env_auto_recover,
         "env_recover_unhealthy_threshold": env_recover_unhealthy_threshold,
+        "skill_config": skill_config or {},
         "task_set": canonical_tasks,
         "task_set_fingerprint": _task_set_fingerprint(canonical_tasks),
         "path_fingerprints": {
@@ -143,6 +146,7 @@ def _write_run_manifest(
             "nanobot_fork_path": _path_fingerprint(nanobot_fork_path),
             "nanobot_config_path": _path_fingerprint(nanobot_config_path),
             "gui_claw_path": _path_fingerprint(gui_claw_path),
+            "skill_config_path": _path_fingerprint(skill_config_path),
         },
     }
 
@@ -334,6 +338,12 @@ def _add_common_arguments(parser: argparse.ArgumentParser) -> None:
         help="Path to JSON config file providing framework_profile and related adapter options",
     )
     parser.add_argument(
+        "--skill-config",
+        "--skill_config",
+        dest="skill_config",
+        help="Path to JSON config file enabling MobileWorld-native GUI skill reuse",
+    )
+    parser.add_argument(
         "--nanobot-fork-path",
         "--nanobot_fork_path",
         dest="nanobot_fork_path",
@@ -508,6 +518,8 @@ async def execute(args: argparse.Namespace) -> None:
         or args.api_key
         or os.getenv("API_KEY")
     )
+    skill_config_path = getattr(args, "skill_config", None)
+    skill_config_payload = None
 
     framework_config_path = getattr(args, "framework_config", None)
     if framework_config_path:
@@ -538,6 +550,12 @@ async def execute(args: argparse.Namespace) -> None:
         judge_model = config_payload.get("judge_model", judge_model)
         judge_api_base = config_payload.get("judge_api_base", judge_api_base)
         judge_api_key = config_payload.get("judge_api_key", judge_api_key)
+        if "skill_config" in config_payload:
+            skill_config_payload = config_payload.get("skill_config")
+
+    if skill_config_path:
+        loaded_skill_config = load_framework_config(skill_config_path)
+        skill_config_payload = loaded_skill_config.get("skill_config", loaded_skill_config)
 
     if isinstance(evaluation_mode, str):
         evaluation_mode = evaluation_mode.strip().lower()
@@ -683,6 +701,7 @@ async def execute(args: argparse.Namespace) -> None:
         nanobot_enable_router=nanobot_enable_router,
         env_auto_recover=env_auto_recover,
         env_recover_unhealthy_threshold=env_recover_unhealthy_threshold,
+        skill_config=skill_config_payload,
     )
     task_names_for_manifest = sorted(
         {
@@ -713,6 +732,8 @@ async def execute(args: argparse.Namespace) -> None:
         nanobot_enable_router=nanobot_enable_router,
         env_auto_recover=env_auto_recover,
         env_recover_unhealthy_threshold=env_recover_unhealthy_threshold,
+        skill_config_path=skill_config_path,
+        skill_config=skill_config_payload if isinstance(skill_config_payload, dict) else None,
     )
     logger.info("Run manifest written: {}", run_manifest_path)
 
@@ -749,6 +770,7 @@ async def execute(args: argparse.Namespace) -> None:
                 "nanobot_enable_router": nanobot_enable_router,
                 "env_auto_recover": env_auto_recover,
                 "env_recover_unhealthy_threshold": env_recover_unhealthy_threshold,
+                "skill_config": skill_config_payload if isinstance(skill_config_payload, dict) else None,
                 "run_manifest": str(run_manifest_path),
             },
             "tasks_with_results": task_results,

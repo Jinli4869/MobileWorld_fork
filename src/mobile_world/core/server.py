@@ -196,13 +196,16 @@ def get_state(device: str = Query(..., description="adb device ID")):
 
     ctr = ensure_controller(device)
     activity = ctr.get_current_activity()
-    app_pkg = ctr.get_current_app()
+    foreground_package = ctr.get_foreground_package(activity)
+    foreground_app = ctr.get_foreground_app(foreground_package)
     width, height = ctr.viewport_size
     response = {
         "device": device,
         "viewport_size": [width, height],
         "current_activity": activity,
-        "current_app": app_pkg,
+        "current_app": foreground_app,
+        "foreground_package": foreground_package,
+        "foreground_app": foreground_app,
     }
     logger.info(f"[STATE] Response: {response}")
     return response

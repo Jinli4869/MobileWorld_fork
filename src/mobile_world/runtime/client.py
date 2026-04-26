@@ -146,6 +146,35 @@ class AndroidEnvClient:
         else:
             raise ValueError(f"Unsupported observation type: {type}")
 
+    def get_state(self) -> dict:
+        """Gets foreground app/activity state from the environment server."""
+        self._ensure_initialized()
+        response = requests.get(f"{self.base_url}/state", params={"device": self.device})
+        response.raise_for_status()
+        payload = response.json()
+        return payload if isinstance(payload, dict) else {}
+
+    def _build_observation(
+        self,
+        *,
+        screenshot,
+        ask_user_response: str | None = None,
+        tool_call=None,
+    ) -> Observation:
+        try:
+            state = self.get_state()
+        except Exception:
+            logger.exception("Failed to fetch foreground state for observation")
+            state = {}
+        return Observation(
+            screenshot=screenshot,
+            ask_user_response=ask_user_response,
+            tool_call=tool_call,
+            current_activity=state.get("current_activity"),
+            foreground_package=state.get("foreground_package"),
+            foreground_app=state.get("foreground_app") or state.get("current_app"),
+        )
+
     def execute_action(self, action: JSONAction) -> Observation:
         """Executes an action in the environment."""
         self._ensure_initialized()
@@ -171,18 +200,15 @@ class AndroidEnvClient:
             ask_user_response = message.get("result", "")
             logger.debug(f"ask_user_response: {ask_user_response}")
 
-        return Observation(
-            screenshot=res,
-            ask_user_response=ask_user_response,
-        )
+        return self._build_observation(screenshot=res, ask_user_response=ask_user_response)
 
     def get_suite_task_list(self, enable_mcp: bool = False, enable_user_interaction: bool = False) -> list[str]:
         """Gets the list of tasks in the suite.
-        
+
         Args:
             enable_mcp: If True, include agent-mcp tasks. Default False excludes them.
             enable_user_interaction: If True, include agent-user-interaction tasks. Default False excludes them.
-        
+
         Returns:
             List of task names filtered by the specified criteria.
             By default (both False), returns only GUI-only tasks.
@@ -192,10 +218,9 @@ class AndroidEnvClient:
         response = requests.get(f"{self.base_url}/task/list")
         response.raise_for_status()
         task_list = response.json()
-        
+
         # Filter tasks based on tags
         filtered_tasks = []
-        gui_only = []
         for task in task_list:
             tags = task.get("tags", [])
             # Skip agent-mcp tasks if not enabled
@@ -235,10 +260,7 @@ class AndroidEnvClient:
 
             logger.debug(f"initialize_task response: Task {task_name} initialized")
             res = self.get_screenshot(wait_to_stabilize=True)
-            return Observation(
-                screenshot=res,
-                ask_user_response=None,
-            )
+            return self._build_observation(screenshot=res, ask_user_response=None)
         except Exception as e:
             logger.error(f"Failed to initialize task {task_name}: {e}")
             raise RuntimeError(f"Failed to initialize task {task_name}: {e}")

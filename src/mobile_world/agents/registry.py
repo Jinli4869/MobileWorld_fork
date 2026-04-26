@@ -20,11 +20,19 @@ from mobile_world.agents.implementations.qwen3vl import Qwen3VLAgentMCP
 from mobile_world.agents.implementations.seed_agent import SeedAgent
 from mobile_world.agents.implementations.ui_venus_agent import VenusNaviAgent
 from mobile_world.runtime.adapters.nanobot_opengui import NanobotOpenGUIAdapter
-from mobile_world.runtime.protocol.adapter import AdapterProfile, FrameworkAdapter, LegacyAgentAdapter
+from mobile_world.runtime.protocol.adapter import (
+    AdapterProfile,
+    FrameworkAdapter,
+    LegacyAgentAdapter,
+)
 from mobile_world.runtime.protocol.registry import (
     get_adapter_registration,
     has_adapter,
+)
+from mobile_world.runtime.protocol.registry import (
     list_adapters as list_protocol_adapters,
+)
+from mobile_world.runtime.protocol.registry import (
     register_adapter as register_protocol_adapter,
 )
 
@@ -228,15 +236,17 @@ def create_agent(
     Returns:
         An instance of the agent
     """
+    skill_config_payload = kwargs.pop("skill_config", None)
     if agent_type.endswith(".py") or os.path.exists(agent_type):
         agent_class = load_agent_from_file(agent_type)
         try:
-            return agent_class(
+            agent = agent_class(
                 model_name=model_name,
                 llm_base_url=llm_base_url,
                 api_key=api_key,
                 **kwargs,
             )
+            return _maybe_wrap_with_skills(agent, skill_config_payload)
         except Exception as e:
             raise ValueError(f"Error creating agent: {e}")
 
@@ -244,13 +254,26 @@ def create_agent(
     if agent_type not in AGENT_CONFIGS:
         raise ValueError(f"Unsupported agent type: {agent_type}")
 
-    return AGENT_CONFIGS[agent_type]["class"](
+    agent = AGENT_CONFIGS[agent_type]["class"](
         model_name=model_name,
         llm_base_url=llm_base_url,
         tools=kwargs["env"].tools,
         api_key=api_key,
         **kwargs,
     )
+    return _maybe_wrap_with_skills(agent, skill_config_payload)
+
+
+def _maybe_wrap_with_skills(agent: BaseAgent, skill_config_payload) -> BaseAgent:
+    if not skill_config_payload:
+        return agent
+    from mobile_world.skills.agent import SkillAugmentedAgent
+    from mobile_world.skills.config import SkillConfig
+
+    skill_config = SkillConfig.from_payload(skill_config_payload)
+    if not skill_config.enabled or skill_config.mode == "off":
+        return agent
+    return SkillAugmentedAgent(agent, skill_config)
 
 
 register_builtin_protocol_adapters()
