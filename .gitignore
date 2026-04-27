@@ -60,3 +60,6 @@ src/mobile_world/tasks/definitions/native/delete_low_res_screenshots_ask_user.py
 tests/unit/tasks/test_compress_year_images_ask_user.py
 tests/unit/tasks/test_delete_low_res_screenshots_ask_user.py
 task_backups/
+
+traj_knowact/
+gui_skills/

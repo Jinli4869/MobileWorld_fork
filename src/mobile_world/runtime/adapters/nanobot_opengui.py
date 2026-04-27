@@ -36,6 +36,7 @@ from mobile_world.runtime.protocol.adapter import (
 _DEFAULT_NANOBOT_FORK_PATH = "/home/jinli/Project/nanobot_fork"
 _DEFAULT_GUI_CLAW_PATH = "/home/jinli/Project/GUI-Claw"
 _ALLOWED_EVALUATION_MODES = {"standard", "mixed"}
+_ALLOWED_OPENGUI_EXECUTION_MODES = {"nanobot_loop", "direct_gui"}
 _TOKEN_USAGE_KEYS = ("prompt_tokens", "completion_tokens", "cached_tokens", "total_tokens")
 _TRUSTED_WEATHER_HOST_HINTS = (
     "open-meteo.com",
@@ -113,6 +114,44 @@ def _coerce_positive_int(value: Any, *, default: int | None = None) -> int | Non
     if parsed <= 0:
         raise ValueError(f"invalid_positive_int:{parsed}")
     return parsed
+
+
+def _with_openai_v1_suffix(base_url: str | None) -> str | None:
+    if not isinstance(base_url, str):
+        return None
+    normalized = base_url.strip().rstrip("/")
+    if not normalized:
+        return None
+    if normalized.endswith("/v1"):
+        return normalized
+    return f"{normalized}/v1"
+
+
+def _default_llm_base_url_from_env() -> str | None:
+    return _with_openai_v1_suffix(
+        os.getenv("MA_INTRANET_URL")
+        or os.getenv("MA_INTRANE_URL")
+    )
+
+
+def _normalize_opengui_execution_mode(value: Any, *, default: str = "nanobot_loop") -> str:
+    if value is None:
+        return default
+    normalized = str(value).strip().lower().replace("-", "_")
+    aliases = {
+        "mixed": "nanobot_loop",
+        "nanobot": "nanobot_loop",
+        "agent_loop": "nanobot_loop",
+        "nanobot_agent_loop": "nanobot_loop",
+        "opengui": "direct_gui",
+        "direct": "direct_gui",
+        "gui_only": "direct_gui",
+        "opengui_direct": "direct_gui",
+    }
+    normalized = aliases.get(normalized, normalized)
+    if normalized not in _ALLOWED_OPENGUI_EXECUTION_MODES:
+        raise ValueError(f"invalid_opengui_execution_mode:{value!r}")
+    return normalized
 
 
 def _json_loads_maybe(text: Any) -> dict[str, Any] | None:
@@ -1025,6 +1064,8 @@ def _infer_provider_name(model_name: str | None, llm_base_url: str | None) -> st
         return "openrouter"
     if "api.openai.com" in base:
         return "openai"
+    if base:
+        return "custom"
     if "qwen" in model:
         return "dashscope"
     if model.startswith("gpt"):
@@ -1037,15 +1078,16 @@ def _resolve_runtime_api_key(provider_name: str, explicit_api_key: str | None) -
         return explicit_api_key
 
     if provider_name == "dashscope":
-        return os.getenv("DASHSCOPE_API_KEY") or os.getenv("API_KEY")
+        return os.getenv("DASHSCOPE_API_KEY") or os.getenv("MA_TOKEN") or os.getenv("API_KEY")
     if provider_name == "openai":
-        return os.getenv("OPENAI_API_KEY") or os.getenv("API_KEY")
+        return os.getenv("OPENAI_API_KEY") or os.getenv("MA_TOKEN") or os.getenv("API_KEY")
     if provider_name == "openrouter":
-        return os.getenv("OPENROUTER_API_KEY") or os.getenv("API_KEY")
+        return os.getenv("OPENROUTER_API_KEY") or os.getenv("MA_TOKEN") or os.getenv("API_KEY")
     if provider_name == "custom":
-        return os.getenv("API_KEY")
+        return os.getenv("MA_TOKEN") or os.getenv("API_KEY")
     return (
-        os.getenv("API_KEY")
+        os.getenv("MA_TOKEN")
+        or os.getenv("API_KEY")
         or os.getenv("DASHSCOPE_API_KEY")
         or os.getenv("OPENAI_API_KEY")
         or os.getenv("OPENROUTER_API_KEY")
@@ -1187,6 +1229,7 @@ class NanobotOpenGUIAdapter(FrameworkAdapter):
         nanobot_gui_task_max_steps: int | None = None,
         nanobot_gui_task_max_calls: int | None = None,
         nanobot_no_log_watchdog_seconds: int | None = None,
+        opengui_execution_mode: str | None = None,
     ) -> None:
         self.model_name = model_name
         self.llm_base_url = llm_base_url
@@ -1211,6 +1254,10 @@ class NanobotOpenGUIAdapter(FrameworkAdapter):
         self.nanobot_no_log_watchdog_seconds = _coerce_positive_int(
             nanobot_no_log_watchdog_seconds,
             default=120,
+        )
+        self.opengui_execution_mode = _normalize_opengui_execution_mode(
+            opengui_execution_mode,
+            default="nanobot_loop",
         )
 
         self._initialized = False
@@ -1299,6 +1346,16 @@ class NanobotOpenGUIAdapter(FrameworkAdapter):
                 ok=False,
                 message=f"nanobot_no_log_watchdog_seconds_invalid:{exc}",
             )
+        try:
+            runtime_opengui_execution_mode = _normalize_opengui_execution_mode(
+                options.get("opengui_execution_mode"),
+                default=self.opengui_execution_mode,
+            )
+        except ValueError as exc:
+            return AdapterInitializeResult(
+                ok=False,
+                message=str(exc),
+            )
         runtime_nanobot_config_path = (
             options.get("nanobot_config_path")
             or self.nanobot_config_path
@@ -1369,6 +1426,7 @@ class NanobotOpenGUIAdapter(FrameworkAdapter):
             "nanobot_gui_task_max_steps": runtime_nanobot_gui_task_max_steps,
             "nanobot_gui_task_max_calls": runtime_nanobot_gui_task_max_calls,
             "nanobot_no_log_watchdog_seconds": runtime_nanobot_no_log_watchdog_seconds,
+            "opengui_execution_mode": runtime_opengui_execution_mode,
             "nanobot_fork_path": str(self.nanobot_root),
             "mobileworld_container_name": options.get("mobileworld_container_name"),
             "mobileworld_device": options.get("mobileworld_device"),
@@ -1393,6 +1451,7 @@ class NanobotOpenGUIAdapter(FrameworkAdapter):
                 "nanobot_gui_task_max_steps": runtime_nanobot_gui_task_max_steps,
                 "nanobot_gui_task_max_calls": runtime_nanobot_gui_task_max_calls,
                 "nanobot_no_log_watchdog_seconds": runtime_nanobot_no_log_watchdog_seconds,
+                "opengui_execution_mode": runtime_opengui_execution_mode,
             },
         )
 
@@ -1435,6 +1494,13 @@ class NanobotOpenGUIAdapter(FrameworkAdapter):
         if parsed is None or parsed <= 0:
             return None
         return parsed
+
+    def _reported_execution_mode(self) -> str:
+        return (
+            "direct_gui"
+            if self._state.get("opengui_execution_mode") == "direct_gui"
+            else "mixed"
+        )
 
     @staticmethod
     def _safe_mtime(path: Path) -> float:
@@ -1533,13 +1599,23 @@ class NanobotOpenGUIAdapter(FrameworkAdapter):
         timeout_seconds: int | None = None,
     ) -> tuple[dict[str, Any] | None, bool, bool]:
         self._state["_last_execution_timeout_reason"] = None
-        def _thread_worker(result_holder: dict[str, Any], error_holder: dict[str, BaseException]) -> None:
-            try:
-                coro = self._execute_with_nanobot_loop(
+
+        def _build_execution_coro() -> Any:
+            if self._state.get("opengui_execution_mode") == "direct_gui":
+                return self._execute_with_direct_gui(
                     task_name=task_name,
                     task_goal=task_goal,
                     run_id=run_id,
                 )
+            return self._execute_with_nanobot_loop(
+                task_name=task_name,
+                task_goal=task_goal,
+                run_id=run_id,
+            )
+
+        def _thread_worker(result_holder: dict[str, Any], error_holder: dict[str, BaseException]) -> None:
+            try:
+                coro = _build_execution_coro()
                 if timeout_seconds is not None and timeout_seconds > 0:
                     coro = asyncio.wait_for(coro, timeout=float(timeout_seconds))
                 result_holder["value"] = asyncio.run(coro)
@@ -1579,11 +1655,7 @@ class NanobotOpenGUIAdapter(FrameworkAdapter):
 
         def _subprocess_worker(conn: Any) -> None:
             try:
-                coro = self._execute_with_nanobot_loop(
-                    task_name=task_name,
-                    task_goal=task_goal,
-                    run_id=run_id,
-                )
+                coro = _build_execution_coro()
                 result = asyncio.run(coro)
                 conn.send({"ok": True, "result": result})
             except BaseException as exc:  # pragma: no cover - defensive runtime path
@@ -1695,11 +1767,12 @@ class NanobotOpenGUIAdapter(FrameworkAdapter):
             if hasattr(config.gui, "artifacts_dir"):
                 config.gui.artifacts_dir = str(gui_artifacts_root)
 
+            runtime_llm_base_url = self.llm_base_url or _default_llm_base_url_from_env()
             provider_name = str(getattr(config.agents.defaults, "provider", "auto") or "auto").strip().lower()
-            inferred_provider_name = _infer_provider_name(self.model_name, self.llm_base_url)
+            inferred_provider_name = _infer_provider_name(self.model_name, runtime_llm_base_url)
             if provider_name in {"", "auto"}:
                 provider_name = inferred_provider_name
-            elif self.llm_base_url and inferred_provider_name not in {"", "custom"}:
+            elif runtime_llm_base_url and inferred_provider_name not in {"", "custom"}:
                 # Explicit runtime base URL takes precedence over static config provider.
                 provider_name = inferred_provider_name
             config.agents.defaults.provider = provider_name
@@ -1713,8 +1786,8 @@ class NanobotOpenGUIAdapter(FrameworkAdapter):
             runtime_api_key = _resolve_runtime_api_key(provider_name, self.api_key)
             if runtime_api_key and hasattr(provider_cfg, "api_key"):
                 provider_cfg.api_key = runtime_api_key
-            if self.llm_base_url and hasattr(provider_cfg, "api_base"):
-                provider_cfg.api_base = self.llm_base_url
+            if runtime_llm_base_url and hasattr(provider_cfg, "api_base"):
+                provider_cfg.api_base = runtime_llm_base_url
 
             mw_adb_wrapper: Path | None = None
             adb_wrapper: Path | None = None
@@ -1743,6 +1816,10 @@ class NanobotOpenGUIAdapter(FrameworkAdapter):
             config.gui.provider = provider_name
             if getattr(config.gui, "evaluation", None) is not None:
                 config.gui.evaluation.judge_model = runtime_model
+                if runtime_api_key and hasattr(config.gui.evaluation, "api_key"):
+                    config.gui.evaluation.api_key = runtime_api_key
+                if runtime_llm_base_url and hasattr(config.gui.evaluation, "api_base"):
+                    config.gui.evaluation.api_base = runtime_llm_base_url
 
             gui_task_max_steps = _coerce_int(
                 self._state.get("nanobot_gui_task_max_steps"),
@@ -1938,6 +2015,190 @@ class NanobotOpenGUIAdapter(FrameworkAdapter):
             "gui_task_call_cap_reached": bool(gui_task_call_cap_reached),
         }
 
+    async def _execute_with_direct_gui(
+        self,
+        *,
+        task_name: str,
+        task_goal: str,
+        run_id: str,
+    ) -> dict[str, Any]:
+        _ = task_name
+        if self.nanobot_root is None:
+            raise RuntimeError("nanobot_fork_path_not_found")
+
+        with _temporary_sys_path(self.nanobot_root):
+            from nanobot.agent.tools.gui import GuiSubagentTool
+            from nanobot.cli.commands import _resolve_gui_runtime
+            from nanobot.config.loader import load_config, set_config_path
+
+            config_path = Path(self._state["nanobot_config_path"]).expanduser().resolve()
+            set_config_path(config_path)
+            config = load_config(config_path)
+            config.agents.defaults.workspace = self._state["gui_claw_path"]
+            runtime_model = self.model_name or config.agents.defaults.model
+            config.agents.defaults.model = runtime_model
+
+            output_dir = Path(str(self._state.get("output_dir", "."))).expanduser().resolve()
+            gui_artifacts_root = output_dir / "nanobot_gui_task_runs"
+            gui_artifacts_root.mkdir(parents=True, exist_ok=True)
+
+            if config.gui is None:
+                raise RuntimeError("nanobot_gui_config_missing")
+            if hasattr(config.gui, "artifacts_dir"):
+                config.gui.artifacts_dir = str(gui_artifacts_root)
+
+            runtime_llm_base_url = self.llm_base_url or _default_llm_base_url_from_env()
+            provider_name = str(getattr(config.agents.defaults, "provider", "auto") or "auto").strip().lower()
+            inferred_provider_name = _infer_provider_name(self.model_name, runtime_llm_base_url)
+            if provider_name in {"", "auto"}:
+                provider_name = inferred_provider_name
+            elif runtime_llm_base_url and inferred_provider_name not in {"", "custom"}:
+                provider_name = inferred_provider_name
+            config.agents.defaults.provider = provider_name
+
+            provider_cfg = getattr(config.providers, provider_name, None)
+            if provider_cfg is None:
+                provider_name = inferred_provider_name if inferred_provider_name not in {"", "custom"} else "custom"
+                config.agents.defaults.provider = provider_name
+                provider_cfg = getattr(config.providers, provider_name, None) or config.providers.custom
+
+            runtime_api_key = _resolve_runtime_api_key(provider_name, self.api_key)
+            if runtime_api_key and hasattr(provider_cfg, "api_key"):
+                provider_cfg.api_key = runtime_api_key
+            if runtime_llm_base_url and hasattr(provider_cfg, "api_base"):
+                provider_cfg.api_base = runtime_llm_base_url
+
+            config.gui.model = runtime_model
+            config.gui.provider = provider_name
+            config.gui.enable_planner = False
+            config.gui.enable_router = False
+            if getattr(config.gui, "evaluation", None) is not None:
+                config.gui.evaluation.judge_model = runtime_model
+                if runtime_api_key and hasattr(config.gui.evaluation, "api_key"):
+                    config.gui.evaluation.api_key = runtime_api_key
+                if runtime_llm_base_url and hasattr(config.gui.evaluation, "api_base"):
+                    config.gui.evaluation.api_base = runtime_llm_base_url
+
+            gui_task_max_steps = _coerce_int(
+                self._state.get("nanobot_gui_task_max_steps"),
+                default=50,
+            )
+            if gui_task_max_steps <= 0:
+                gui_task_max_steps = 50
+            config.gui.max_steps = gui_task_max_steps
+
+            device = self._state.get("mobileworld_device")
+            adb_cfg = getattr(config.gui, "adb", None)
+            if (
+                adb_cfg is not None
+                and isinstance(device, str)
+                and device.strip()
+                and hasattr(adb_cfg, "serial")
+            ):
+                adb_cfg.serial = device.strip()
+
+            gui_provider, gui_model = _resolve_gui_runtime(config)
+            gui_usage_accum = _empty_token_usage()
+            gui_usage_stats = {"calls": 0, "missing": 0}
+            _instrument_provider_usage(
+                gui_provider,
+                usage_bucket=gui_usage_accum,
+                usage_stats=gui_usage_stats,
+            )
+
+            gui_tool = GuiSubagentTool(
+                gui_config=config.gui,
+                provider=gui_provider,
+                model=gui_model or runtime_model,
+                workspace=config.workspace_path,
+            )
+            # Strict direct-GUI mode avoids nanobot policy-memory injection. Skill
+            # extraction/reuse still use OpenGUI's skill store when enabled.
+            gui_tool._load_policy_context_and_memory_store = lambda: (None, None)  # type: ignore[method-assign]
+
+            env_updates: dict[str, str | None] = {}
+            if isinstance(device, str) and device.strip():
+                env_updates["ANDROID_SERIAL"] = device.strip()
+            with _temporary_environ(env_updates):
+                raw_output = await gui_tool.execute(task=task_goal, max_retries=1)
+                await gui_tool._wait_for_pending_postprocessing()
+
+        result_payload = _json_loads_maybe(raw_output) or {}
+        explicit_trace_refs: list[str] = []
+        explicit_screenshot_refs: list[str] = []
+        trace_path = result_payload.get("trace_path")
+        if isinstance(trace_path, str) and trace_path.strip():
+            explicit_trace_refs.append(trace_path.strip())
+        post_run_state = result_payload.get("post_run_state")
+        if isinstance(post_run_state, dict):
+            latest_screenshot = post_run_state.get("latest_screenshot_path")
+            if isinstance(latest_screenshot, str) and latest_screenshot.strip():
+                explicit_screenshot_refs.append(latest_screenshot.strip())
+                parent = Path(latest_screenshot.strip()).expanduser().parent
+                if parent.name == "screenshots":
+                    explicit_trace_refs.append(str(parent.parent))
+
+        (
+            local_trace_refs,
+            local_screenshot_refs,
+            artifact_gui_task_calls,
+            artifact_gui_steps,
+            artifact_total_latency_ms,
+            artifact_avg_latency_ms,
+            gui_trace_usage,
+        ) = self._estimate_gui_stats_from_artifacts(gui_artifacts_root=str(gui_artifacts_root))
+        merged_trace_refs = [
+            normalized
+            for ref in sorted({*explicit_trace_refs, *local_trace_refs})
+            if (normalized := _path_str_if_exists(ref)) is not None
+        ]
+        merged_screenshot_refs = [
+            normalized
+            for ref in sorted({*explicit_screenshot_refs, *local_screenshot_refs})
+            if (normalized := _path_str_if_exists(ref)) is not None
+        ]
+        trace_total_latency_ms, trace_avg_latency_ms = _compute_gui_latency_stats_from_trace_refs(
+            merged_trace_refs
+        )
+        gui_task_total_latency_ms = trace_total_latency_ms or artifact_total_latency_ms
+        gui_task_avg_latency_ms = trace_avg_latency_ms or artifact_avg_latency_ms
+        steps_taken = _coerce_int(result_payload.get("steps_taken"), default=0)
+        gui_steps = max(artifact_gui_steps, steps_taken)
+        gui_task_calls = max(artifact_gui_task_calls, 1)
+        gui_usage_provider = _normalize_token_usage(gui_usage_accum)
+        gui_usage = _fill_missing_token_usage(gui_usage_provider, gui_trace_usage)
+        token_usage_incomplete = _coerce_int(gui_usage_stats.get("missing"), default=0) > 0
+
+        return {
+            "execution_mode": "direct_gui",
+            "success": bool(result_payload.get("success", False)),
+            "summary": str(result_payload.get("summary") or ""),
+            "messages": [],
+            "error": result_payload.get("error"),
+            "adb_calls": 0,
+            "gui_task_calls": gui_task_calls,
+            "deeplink_calls": 0,
+            "gui_steps": gui_steps,
+            "trace_refs": merged_trace_refs,
+            "gui_screenshot_refs": merged_screenshot_refs,
+            "gui_artifacts_root": _path_str_if_exists(str(gui_artifacts_root)),
+            "gui_task_total_latency_ms": gui_task_total_latency_ms,
+            "gui_task_avg_latency_ms": gui_task_avg_latency_ms,
+            "token_usage_main": _empty_token_usage(),
+            "token_usage_gui_task": gui_usage,
+            "token_usage_total": gui_usage,
+            "token_usage_incomplete": token_usage_incomplete,
+            "gui_task_max_calls": 1,
+            "gui_task_calls_executed": 1,
+            "gui_task_call_cap_reached": False,
+            "timeout_triggered": False,
+            "timeout_reason": None,
+            "watchdog_triggered": False,
+            "no_log_watchdog_seconds": self._derive_no_log_watchdog_seconds(),
+            "execution_cancelled": False,
+            "effective_timeout_seconds": self._derive_execution_timeout_seconds(),
+        }
+
     @staticmethod
     def _extract_lane_stats(
         messages: list[dict[str, Any]],
@@ -2034,6 +2295,7 @@ class NanobotOpenGUIAdapter(FrameworkAdapter):
         task_goal: str,
         run_id: str,
     ) -> dict[str, Any]:
+        reported_execution_mode = self._reported_execution_mode()
         timeout_seconds = self._derive_execution_timeout_seconds()
         raw_result: dict[str, Any] | None = None
         timeout_triggered = False
@@ -2081,9 +2343,9 @@ class NanobotOpenGUIAdapter(FrameworkAdapter):
             timeout_gui_usage = _normalize_token_usage(timeout_gui_trace_usage)
             timeout_total_usage = _add_token_usage(timeout_main_usage, timeout_gui_usage)
             return {
-                "execution_mode": "mixed",
+                "execution_mode": reported_execution_mode,
                 "success": False,
-                "summary": "nanobot_mixed_execution_timeout",
+                "summary": f"{reported_execution_mode}_execution_timeout",
                 "error": timeout_error,
                 "adb_calls": wrapper_mw_adb_calls + wrapper_adb_calls,
                 "gui_task_calls": timeout_gui_task_calls,
@@ -2108,6 +2370,21 @@ class NanobotOpenGUIAdapter(FrameworkAdapter):
                 "execution_cancelled": bool(execution_cancelled),
                 "effective_timeout_seconds": timeout_seconds,
             }
+        if raw_result.get("execution_mode") == "direct_gui":
+            raw_result.setdefault("token_usage_main", _empty_token_usage())
+            raw_result.setdefault("token_usage_gui_task", _empty_token_usage())
+            raw_result.setdefault("token_usage_total", raw_result.get("token_usage_gui_task"))
+            raw_result.setdefault("token_usage_incomplete", False)
+            raw_result.setdefault("gui_task_max_calls", 1)
+            raw_result.setdefault("gui_task_calls_executed", 1)
+            raw_result.setdefault("gui_task_call_cap_reached", False)
+            raw_result.setdefault("timeout_triggered", False)
+            raw_result.setdefault("timeout_reason", None)
+            raw_result.setdefault("watchdog_triggered", False)
+            raw_result.setdefault("no_log_watchdog_seconds", self._derive_no_log_watchdog_seconds())
+            raw_result.setdefault("execution_cancelled", False)
+            raw_result.setdefault("effective_timeout_seconds", timeout_seconds)
+            return raw_result
         lane_stats = self._extract_lane_stats(
             raw_result.get("messages", []),
             default_gui_backend=raw_result.get("default_gui_backend"),
@@ -2160,7 +2437,7 @@ class NanobotOpenGUIAdapter(FrameworkAdapter):
         )
         gui_task_call_cap_reached = bool(raw_result.get("gui_task_call_cap_reached", False))
         return {
-            "execution_mode": "mixed",
+            "execution_mode": reported_execution_mode,
             "success": bool(raw_result.get("success", False)),
             "summary": str(raw_result.get("summary") or ""),
             "messages": raw_result.get("messages"),
@@ -2200,12 +2477,13 @@ class NanobotOpenGUIAdapter(FrameworkAdapter):
 
         if self._task_executed:
             return AdapterStepResult(
-                prediction="nanobot_mixed_execution_already_completed",
+                prediction="opengui_execution_already_completed",
                 action={"action_type": "finished"},
                 done=True,
                 info={
                     "framework": "nanobot_opengui",
-                    "execution_mode": "mixed",
+                    "execution_mode": self._reported_execution_mode(),
+                    "opengui_execution_mode": self._state.get("opengui_execution_mode"),
                     "replayed": True,
                 },
             )
@@ -2213,6 +2491,7 @@ class NanobotOpenGUIAdapter(FrameworkAdapter):
         self._state["steps"] = int(self._state.get("steps", 0)) + 1
         observation = payload.observation if isinstance(payload.observation, dict) else {}
         task_goal = str(self._state.get("task_goal", payload.task_name) or payload.task_name)
+        reported_execution_mode = self._reported_execution_mode()
 
         try:
             injected = observation.get("nanobot_mixed_result")
@@ -2225,13 +2504,17 @@ class NanobotOpenGUIAdapter(FrameworkAdapter):
                     task_goal=self._state.get("task_goal", payload.task_name),
                     run_id=payload.run_id,
                 )
-                execution_source = "nanobot_loop"
+                execution_source = (
+                    "direct_gui"
+                    if self._state.get("opengui_execution_mode") == "direct_gui"
+                    else "nanobot_loop"
+                )
         except Exception as exc:
             logger.exception("nanobot mixed execution failed")
             mixed_result = {
-                "execution_mode": "mixed",
+                "execution_mode": reported_execution_mode,
                 "success": False,
-                "summary": "nanobot_mixed_execution_failed",
+                "summary": f"{reported_execution_mode}_execution_failed",
                 "error": f"{type(exc).__name__}: {exc}",
                 "adb_calls": 0,
                 "gui_task_calls": 0,
@@ -2256,7 +2539,11 @@ class NanobotOpenGUIAdapter(FrameworkAdapter):
                 "execution_cancelled": False,
                 "effective_timeout_seconds": self._derive_execution_timeout_seconds(),
             }
-            execution_source = "nanobot_loop_error"
+            execution_source = (
+                "direct_gui_error"
+                if self._state.get("opengui_execution_mode") == "direct_gui"
+                else "nanobot_loop_error"
+            )
 
         pure_answer_required = _goal_requires_pure_answer(task_goal, payload.task_name)
         derived_answer_text: str | None = None
@@ -2318,7 +2605,8 @@ class NanobotOpenGUIAdapter(FrameworkAdapter):
 
         self._task_executed = True
         self._mixed_summary = {
-            "execution_mode": "mixed",
+            "execution_mode": str(mixed_result.get("execution_mode") or reported_execution_mode),
+            "opengui_execution_mode": self._state.get("opengui_execution_mode"),
             "evaluation_mode": self._state.get("evaluation_mode", "mixed"),
             "allow_adb_bypass": bool(self._state.get("allow_adb_bypass", True)),
             "nanobot_max_steps": self._state.get("nanobot_max_steps"),
@@ -2373,12 +2661,13 @@ class NanobotOpenGUIAdapter(FrameworkAdapter):
             action_payload = {"action_type": "finished"}
 
         return AdapterStepResult(
-            prediction=str(mixed_result.get("summary") or "nanobot_mixed_execution_completed"),
+            prediction=str(mixed_result.get("summary") or f"{reported_execution_mode}_execution_completed"),
             action=action_payload,
             done=True,
             info={
                 "framework": "nanobot_opengui",
-                "execution_mode": "mixed",
+                "execution_mode": str(mixed_result.get("execution_mode") or reported_execution_mode),
+                "opengui_execution_mode": self._state.get("opengui_execution_mode"),
                 "allow_adb_bypass": bool(self._state.get("allow_adb_bypass", True)),
                 "nanobot_max_steps": self._state.get("nanobot_max_steps"),
                 "nanobot_gui_task_max_steps": _coerce_int(
@@ -2421,7 +2710,8 @@ class NanobotOpenGUIAdapter(FrameworkAdapter):
             "framework": "nanobot_opengui",
             "task_name": payload.task_name,
             "run_id": payload.run_id,
-            "execution_mode": "mixed",
+            "execution_mode": (self._mixed_summary or {}).get("execution_mode", self._reported_execution_mode()),
+            "opengui_execution_mode": self._state.get("opengui_execution_mode"),
             "evaluation_mode": self._state.get("evaluation_mode", "mixed"),
             "allow_adb_bypass": bool(self._state.get("allow_adb_bypass", True)),
             "nanobot_max_steps": self._state.get("nanobot_max_steps"),
@@ -2486,7 +2776,8 @@ class NanobotOpenGUIAdapter(FrameworkAdapter):
                 metadata={
                     "task_name": payload.task_name,
                     "run_id": payload.run_id,
-                    "execution_mode": "mixed",
+                    "execution_mode": mixed_summary["execution_mode"],
+                    "opengui_execution_mode": self._state.get("opengui_execution_mode"),
                 },
             )
         ]

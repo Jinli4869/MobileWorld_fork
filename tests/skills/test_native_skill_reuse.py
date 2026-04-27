@@ -4,7 +4,11 @@ from pathlib import Path
 from PIL import Image
 
 from mobile_world.agents.base import BaseAgent
+from mobile_world.agents.implementations.general_e2e_agent import GeneralE2EAgentMCP
+from mobile_world.agents.registry import create_agent
 from mobile_world.core.cli import create_parser
+from mobile_world.core.runner import _execute_single_task
+from mobile_world.runtime.protocol.evaluator import EvaluationAudit, EvaluatorResult
 from mobile_world.runtime.protocol.metrics import MetricsCollector
 from mobile_world.runtime.protocol.reporting import aggregate_framework_runs
 from mobile_world.runtime.utils.models import JSONAction, Observation
@@ -34,6 +38,58 @@ class DummyAgent(BaseAgent):
 
     def reset(self):
         pass
+
+
+class FinalizeRecordingAgent(BaseAgent):
+    def __init__(self):
+        super().__init__()
+        self.finalize_kwargs = None
+
+    def predict(self, observation):
+        return "done", JSONAction(action_type="answer", text="done")
+
+    def finalize_task(self, **kwargs):
+        self.finalize_kwargs = kwargs
+        return {"skill_enabled": True}
+
+    def reset(self):
+        pass
+
+
+class DummyEnv:
+    tools = []
+
+    def __init__(self):
+        self.obs = _obs()
+
+    def get_task_goal(self, task_type):
+        return "Open Mail"
+
+    def initialize_task(self, task_name):
+        return self.obs
+
+    def execute_action(self, action):
+        return self.obs
+
+    def tear_down_task(self, task_type):
+        return {"ok": True}
+
+
+class DummyEvaluator:
+    name = "dummy"
+
+    def evaluate(self, env, payload):
+        return EvaluatorResult(
+            evaluator_name=self.name,
+            score=0.5,
+            reason="synthetic",
+            audit=EvaluationAudit(
+                evaluator_name=self.name,
+                primary_signal="synthetic",
+                score=0.5,
+                reason="synthetic",
+            ),
+        )
 
 
 def _obs() -> Observation:
@@ -253,6 +309,39 @@ def test_eval_parser_accepts_skill_config_flag():
         ]
     )
     assert args.skill_config == "/tmp/skills.json"
+
+
+def test_general_e2e_agent_type_is_wrapped_with_native_skills(tmp_path: Path):
+    agent = create_agent(
+        "general_e2e",
+        model_name="qwen3.5-397b-a17b",
+        llm_base_url="http://localhost/v1",
+        api_key="empty",
+        env=DummyEnv(),
+        skill_config={"enabled": True, "mode": "learn", "store_root": str(tmp_path)},
+    )
+
+    assert isinstance(agent, SkillAugmentedAgent)
+    assert isinstance(agent.base_agent, GeneralE2EAgentMCP)
+    assert agent.config.learning_enabled is True
+
+
+def test_runner_does_not_override_skill_success_threshold(tmp_path: Path):
+    agent = FinalizeRecordingAgent()
+    traj_logger = TrajLogger(str(tmp_path), "mail_task")
+
+    _execute_single_task(
+        DummyEnv(),
+        agent,
+        "mail_task",
+        max_step=1,
+        traj_logger=traj_logger,
+        evaluator=DummyEvaluator(),
+        task_metadata={"apps": ["Mail"], "tags": []},
+    )
+
+    assert agent.finalize_kwargs is not None
+    assert "success_threshold" not in agent.finalize_kwargs
 
 
 def test_aggregate_reports_skill_reuse_breakdown(tmp_path: Path):

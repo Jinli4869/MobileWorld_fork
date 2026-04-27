@@ -28,8 +28,31 @@ def load_framework_config(path: str) -> dict:
 
 
 _DEFAULT_NANOBOT_FORK_PATH = "/home/jinli/Project/nanobot_fork"
+_DEFAULT_NANOBOT_CONFIG_PATH = str(
+    Path(__file__).resolve().parents[4] / "configs" / "nanobot_config.json"
+)
 _DEFAULT_GUI_CLAW_PATH = "/home/jinli/Project/GUI-Claw"
+_DEFAULT_MODEL_NAME = "Qwen3.5-397B-A17B"
 _ALLOWED_EVALUATION_MODES = {"standard", "mixed"}
+_ALLOWED_OPENGUI_EXECUTION_MODES = {"nanobot_loop", "direct_gui"}
+
+
+def _with_openai_v1_suffix(base_url: str | None) -> str | None:
+    if not isinstance(base_url, str):
+        return None
+    normalized = base_url.strip().rstrip("/")
+    if not normalized:
+        return None
+    if normalized.endswith("/v1"):
+        return normalized
+    return f"{normalized}/v1"
+
+
+def _default_llm_base_url_from_env() -> str | None:
+    return _with_openai_v1_suffix(
+        os.getenv("MA_INTRANET_URL")
+        or os.getenv("MA_INTRANE_URL")
+    )
 
 
 def _normalize_bool(value: object, *, default: bool) -> bool:
@@ -44,6 +67,26 @@ def _normalize_bool(value: object, *, default: bool) -> bool:
         if normalized in {"0", "false", "no", "off"}:
             return False
     return bool(value)
+
+
+def _normalize_opengui_execution_mode(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = str(value).strip().lower().replace("-", "_")
+    aliases = {
+        "mixed": "nanobot_loop",
+        "nanobot": "nanobot_loop",
+        "agent_loop": "nanobot_loop",
+        "nanobot_agent_loop": "nanobot_loop",
+        "opengui": "direct_gui",
+        "direct": "direct_gui",
+        "gui_only": "direct_gui",
+        "opengui_direct": "direct_gui",
+    }
+    normalized = aliases.get(normalized, normalized)
+    if normalized not in _ALLOWED_OPENGUI_EXECUTION_MODES:
+        raise ValueError(f"Invalid opengui_execution_mode: {value}")
+    return normalized
 
 
 def _normalize_positive_int(
@@ -115,6 +158,7 @@ def _write_run_manifest(
     nanobot_timeout_seconds: int | None,
     nanobot_enable_planner: bool | None,
     nanobot_enable_router: bool | None,
+    opengui_execution_mode: str | None,
     env_auto_recover: bool,
     env_recover_unhealthy_threshold: int,
     skill_config_path: str | None,
@@ -136,6 +180,7 @@ def _write_run_manifest(
         "nanobot_timeout_seconds": nanobot_timeout_seconds,
         "nanobot_enable_planner": nanobot_enable_planner,
         "nanobot_enable_router": nanobot_enable_router,
+        "opengui_execution_mode": opengui_execution_mode,
         "env_auto_recover": env_auto_recover,
         "env_recover_unhealthy_threshold": env_recover_unhealthy_threshold,
         "skill_config": skill_config or {},
@@ -165,18 +210,23 @@ def _add_common_arguments(parser: argparse.ArgumentParser) -> None:
         dest="agent_type",
         help="Type of agent to use (registered name or path to Python file containing agent class)",
     )
-    parser.add_argument("--model-name", "--model_name", dest="model_name", help="Model name to use")
+    parser.add_argument(
+        "--model-name",
+        "--model_name",
+        dest="model_name",
+        help="Model name to use (default: MA_MODEL_NAME or Qwen3.5-397B-A17B)",
+    )
     parser.add_argument(
         "--llm-base-url",
         "--llm_base_url",
         dest="llm_base_url",
-        help="LLM service base URL",
+        help="LLM service base URL (default: MA_INTRANET_URL or MA_INTRANE_URL with /v1 suffix)",
     )
     parser.add_argument(
         "--api-key",
         "--api_key",
         dest="api_key",
-        help="API key for LLM service",
+        help="API key for LLM service (default: MA_TOKEN, then API_KEY)",
     )
     parser.add_argument(
         "--log-file-root",
@@ -402,6 +452,14 @@ def _add_common_arguments(parser: argparse.ArgumentParser) -> None:
         help="Max gui_task invocations per task inside nanobot/opengui mixed loop (default: 3)",
     )
     parser.add_argument(
+        "--opengui-execution-mode",
+        "--opengui_execution_mode",
+        dest="opengui_execution_mode",
+        choices=sorted(_ALLOWED_OPENGUI_EXECUTION_MODES),
+        default=None,
+        help="OpenGUI execution path for nanobot_opengui: nanobot_loop or direct_gui",
+    )
+    parser.add_argument(
         "--nanobot-timeout-seconds",
         "--nanobot_timeout_seconds",
         dest="nanobot_timeout_seconds",
@@ -496,6 +554,13 @@ def configure_parser(subparsers: argparse._SubParsersAction) -> None:
 async def execute(args: argparse.Namespace) -> None:
     """Execute the eval command."""
     log_file_root = args.log_file_root or args.output or "./traj_logs"
+    model_name = (
+        getattr(args, "model_name", None)
+        or os.getenv("MA_MODEL_NAME")
+        or _DEFAULT_MODEL_NAME
+    )
+    llm_base_url = getattr(args, "llm_base_url", None) or _default_llm_base_url_from_env()
+    api_key = getattr(args, "api_key", None) or os.getenv("MA_TOKEN") or os.getenv("API_KEY")
     framework_profile = getattr(args, "framework_profile", None)
     nanobot_fork_path = getattr(args, "nanobot_fork_path", None)
     nanobot_config_path = getattr(args, "nanobot_config_path", None)
@@ -508,15 +573,15 @@ async def execute(args: argparse.Namespace) -> None:
     nanobot_timeout_seconds = getattr(args, "nanobot_timeout_seconds", None)
     nanobot_enable_planner = getattr(args, "nanobot_enable_planner", None)
     nanobot_enable_router = getattr(args, "nanobot_enable_router", None)
+    opengui_execution_mode = getattr(args, "opengui_execution_mode", None)
     env_auto_recover = getattr(args, "env_auto_recover", None)
     env_recover_unhealthy_threshold = getattr(args, "env_recover_unhealthy_threshold", None)
     judge_model = getattr(args, "judge_model", "qwen3-vl-plus")
-    judge_api_base = getattr(args, "judge_api_base", None)
+    judge_api_base = getattr(args, "judge_api_base", None) or llm_base_url
     judge_api_key = (
         getattr(args, "judge_api_key", None)
         or os.getenv("JUDGE_API_KEY")
-        or args.api_key
-        or os.getenv("API_KEY")
+        or api_key
     )
     skill_config_path = getattr(args, "skill_config", None)
     skill_config_payload = None
@@ -543,6 +608,8 @@ async def execute(args: argparse.Namespace) -> None:
             nanobot_enable_planner = config_payload.get("nanobot_enable_planner")
         if "nanobot_enable_router" in config_payload:
             nanobot_enable_router = config_payload.get("nanobot_enable_router")
+        if "opengui_execution_mode" in config_payload:
+            opengui_execution_mode = config_payload.get("opengui_execution_mode")
         if "env_auto_recover" in config_payload:
             env_auto_recover = config_payload.get("env_auto_recover")
         if "env_recover_unhealthy_threshold" in config_payload:
@@ -561,9 +628,11 @@ async def execute(args: argparse.Namespace) -> None:
         evaluation_mode = evaluation_mode.strip().lower()
     if evaluation_mode and evaluation_mode not in _ALLOWED_EVALUATION_MODES:
         raise ValueError(f"Invalid evaluation_mode: {evaluation_mode}")
+    opengui_execution_mode = _normalize_opengui_execution_mode(opengui_execution_mode)
 
     if framework_profile == "nanobot_opengui":
         nanobot_fork_path = nanobot_fork_path or _DEFAULT_NANOBOT_FORK_PATH
+        nanobot_config_path = nanobot_config_path or _DEFAULT_NANOBOT_CONFIG_PATH
         gui_claw_path = gui_claw_path or _DEFAULT_GUI_CLAW_PATH
         evaluation_mode = evaluation_mode or "mixed"
         allow_adb_bypass = _normalize_bool(allow_adb_bypass, default=True)
@@ -598,6 +667,7 @@ async def execute(args: argparse.Namespace) -> None:
             raise ValueError("nanobot_opengui requires allow_adb_bypass=true")
         if not nanobot_config_path:
             raise ValueError("nanobot_config_path is required when framework_profile=nanobot_opengui")
+        opengui_execution_mode = opengui_execution_mode or "nanobot_loop"
     else:
         evaluation_mode = evaluation_mode or "standard"
         allow_adb_bypass = _normalize_bool(allow_adb_bypass, default=False)
@@ -635,6 +705,7 @@ async def execute(args: argparse.Namespace) -> None:
             if nanobot_enable_router is not None
             else None
         )
+        opengui_execution_mode = None
 
     env_auto_recover = _normalize_bool(env_auto_recover, default=True)
     env_recover_unhealthy_threshold = _normalize_positive_int(
@@ -658,13 +729,13 @@ async def execute(args: argparse.Namespace) -> None:
 
     task_results, task_list_with_no_results = run_agent_with_evaluation(
         agent_type=args.agent_type,
-        model_name=args.model_name,
-        llm_base_url=args.llm_base_url,
+        model_name=model_name,
+        llm_base_url=llm_base_url,
         log_file_root=log_file_root,
         tasks=final_tasks,
         max_step=args.max_round or -1,
         aw_urls=aw_urls,
-        api_key=args.api_key or os.getenv("API_KEY"),
+        api_key=api_key,
         executor_llm_base_url=args.executor_llm_base_url,
         executor_model_name=args.executor_model_name,
         executor_agent_class=args.executor_agent_class,
@@ -699,6 +770,7 @@ async def execute(args: argparse.Namespace) -> None:
         nanobot_timeout_seconds=nanobot_timeout_seconds,
         nanobot_enable_planner=nanobot_enable_planner,
         nanobot_enable_router=nanobot_enable_router,
+        opengui_execution_mode=opengui_execution_mode,
         env_auto_recover=env_auto_recover,
         env_recover_unhealthy_threshold=env_recover_unhealthy_threshold,
         skill_config=skill_config_payload,
@@ -730,6 +802,7 @@ async def execute(args: argparse.Namespace) -> None:
         nanobot_timeout_seconds=nanobot_timeout_seconds,
         nanobot_enable_planner=nanobot_enable_planner,
         nanobot_enable_router=nanobot_enable_router,
+        opengui_execution_mode=opengui_execution_mode,
         env_auto_recover=env_auto_recover,
         env_recover_unhealthy_threshold=env_recover_unhealthy_threshold,
         skill_config_path=skill_config_path,
@@ -756,7 +829,7 @@ async def execute(args: argparse.Namespace) -> None:
             },
             "metadata": {
                 "agent_type": args.agent_type,
-                "model_name": args.model_name,
+                "model_name": model_name,
                 "timestamp": datetime.now().isoformat(),
                 "log_file_root": log_file_root,
                 "framework_profile": framework_profile,
@@ -768,6 +841,7 @@ async def execute(args: argparse.Namespace) -> None:
                 "nanobot_timeout_seconds": nanobot_timeout_seconds,
                 "nanobot_enable_planner": nanobot_enable_planner,
                 "nanobot_enable_router": nanobot_enable_router,
+                "opengui_execution_mode": opengui_execution_mode,
                 "env_auto_recover": env_auto_recover,
                 "env_recover_unhealthy_threshold": env_recover_unhealthy_threshold,
                 "skill_config": skill_config_payload if isinstance(skill_config_payload, dict) else None,

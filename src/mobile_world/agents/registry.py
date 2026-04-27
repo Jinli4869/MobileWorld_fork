@@ -119,6 +119,7 @@ def _nanobot_opengui_factory(**kwargs) -> FrameworkAdapter:
         nanobot_enable_router=kwargs.get("nanobot_enable_router"),
         nanobot_gui_task_max_steps=kwargs.get("nanobot_gui_task_max_steps"),
         nanobot_gui_task_max_calls=kwargs.get("nanobot_gui_task_max_calls"),
+        opengui_execution_mode=kwargs.get("opengui_execution_mode"),
     )
 
 
@@ -131,7 +132,7 @@ def register_reference_framework_adapters() -> None:
             adapter_class=NanobotOpenGUIAdapter,
             factory=_nanobot_opengui_factory,
             capabilities=["gui_action", "mixed_mode"],
-            metadata={"source": "mobile_world.runtime.adapters.nanobot_opengui", "execution": "mixed"},
+            metadata={"source": "mobile_world.runtime.adapters.nanobot_opengui", "execution": "mixed_or_direct_gui"},
         )
 
 

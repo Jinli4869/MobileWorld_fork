@@ -1,0 +1,11 @@
+{
+  "enabled": true,
+  "mode": "learn",
+  "store_root": "/home/jinli/Project/MobileWorld_fork/traj_knowact/mobileworld_skills",
+  "extract_skills": true,
+  "extract_failed_skills": true,
+  "success_threshold": 0.99,
+  "max_extract_steps": 20,
+  "failed_prefix_max_steps": 10,
+  "cleanup_failure_streak": 3
+}

@@ -1,0 +1,41 @@
+{
+  "agents": {
+    "defaults": {
+      "workspace": "/home/jinli/Project/MobileWorld_fork",
+      "model": "qwen3.5-397b-a17b",
+      "provider": "custom",
+      "maxToolIterations": 50
+    }
+  },
+  "providers": {
+    "custom": {
+      "apiBase": "",
+      "apiKey": ""
+    }
+  },
+  "tools": {
+    "exec": {
+      "enable": false,
+      "timeout": 60
+    },
+    "restrictToWorkspace": false
+  },
+  "gui": {
+    "backend": "adb",
+    "model": "qwen3.5-397b-a17b",
+    "provider": "custom",
+    "agentProfile": "qwen3vl",
+    "maxSteps": 50,
+    "imageScaleRatio": 1.0,
+    "enableSkillExtraction": false,
+    "enableSkillExecution": true,
+    "enablePlanner": false,
+    "enableRouter": false,
+    "evaluation": {
+      "enabled": false,
+      "judgeModel": "qwen3.5-397b-a17b",
+      "apiBase": "",
+      "apiKey": ""
+    }
+  }
+}

@@ -348,7 +348,6 @@ def _execute_single_task(
                 artifact_paths=traj_logger.artifact_paths(),
                 metrics=metrics_summary,
                 task_metadata=task_metadata or {},
-                success_threshold=0.99,
             )
             if isinstance(skill_summary, dict):
                 traj_logger.log_skill_summary(skill_summary)
@@ -408,6 +407,7 @@ def _process_task_on_env(
     nanobot_enable_router: bool | None = None,
     nanobot_gui_task_max_steps: int | None = None,
     nanobot_gui_task_max_calls: int | None = None,
+    opengui_execution_mode: str | None = None,
     skill_config: dict | None = None,
     env_auto_recover: bool = True,
     env_recover_unhealthy_threshold: int = 2,
@@ -526,6 +526,7 @@ def _process_task_on_env(
                     nanobot_enable_router=nanobot_enable_router,
                     nanobot_gui_task_max_steps=nanobot_gui_task_max_steps,
                     nanobot_gui_task_max_calls=nanobot_gui_task_max_calls,
+                    opengui_execution_mode=opengui_execution_mode,
                     device=device,
                     **kwargs,
                 )
@@ -541,6 +542,7 @@ def _process_task_on_env(
                     "nanobot_enable_router": nanobot_enable_router,
                     "nanobot_gui_task_max_steps": nanobot_gui_task_max_steps,
                     "nanobot_gui_task_max_calls": nanobot_gui_task_max_calls,
+                    "opengui_execution_mode": opengui_execution_mode,
                     "mobileworld_container_name": container_name,
                     "mobileworld_device": device,
                     "mobileworld_env_url": env.base_url,
@@ -713,6 +715,7 @@ def run_agent_with_evaluation(
     nanobot_enable_router: bool | None = None,
     nanobot_gui_task_max_steps: int | None = None,
     nanobot_gui_task_max_calls: int | None = None,
+    opengui_execution_mode: str | None = None,
     skill_config: dict | None = None,
     env_auto_recover: bool = True,
     env_recover_unhealthy_threshold: int = 2,
@@ -836,6 +839,7 @@ def run_agent_with_evaluation(
                     nanobot_enable_router=nanobot_enable_router,
                     nanobot_gui_task_max_steps=nanobot_gui_task_max_steps,
                     nanobot_gui_task_max_calls=nanobot_gui_task_max_calls,
+                    opengui_execution_mode=opengui_execution_mode,
                     skill_config=skill_config,
                     env_auto_recover=env_auto_recover,
                     env_recover_unhealthy_threshold=env_recover_unhealthy_threshold,

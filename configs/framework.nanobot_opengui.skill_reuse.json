@@ -1,7 +1,7 @@
 {
   "framework_profile": "nanobot_opengui",
   "nanobot_fork_path": "/home/jinli/Project/nanobot_fork",
-  "nanobot_config_path": "/home/jinli/Project/MobileWorld_fork/configs/nanobot_config.skill_learn.json",
+  "nanobot_config_path": "/home/jinli/Project/MobileWorld_fork/configs/nanobot_config.skill_reuse.json",
   "gui_claw_path": "/home/jinli/Project/MobileWorld_fork",
   "evaluation_mode": "mixed",
   "opengui_execution_mode": "nanobot_loop",

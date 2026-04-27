@@ -1,0 +1,12 @@
+{
+  "enabled": true,
+  "mode": "reuse",
+  "store_root": "/home/jinli/Project/MobileWorld_fork/traj_knowact/mobileworld_skills",
+  "skill_threshold": 0.6,
+  "top_k": 5,
+  "llm_judge": false,
+  "extract_skills": false,
+  "extract_failed_skills": false,
+  "success_threshold": 0.99,
+  "cleanup_failure_streak": 3
+}

@@ -383,7 +383,7 @@ class GeneralE2EAgentMCP(MCPAgent):
 
             except Exception as e:
                 logger.warning(
-                    f"Error fetching response from agent: {self.model_name}, {self.llm_base_url}, {self.api_key}"
+                    f"Error fetching response from agent: {self.model_name}, {self.llm_base_url}, <redacted>"
                 )
 
                 error_msg = str(e)
