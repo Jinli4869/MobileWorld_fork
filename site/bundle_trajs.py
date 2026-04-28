@@ -3,6 +3,18 @@
 
 Without --with-screenshots: produces a single .json.gz
 With --with-screenshots:    produces .json.gz (with frame indices) + .mp4 (all screenshots as video frames)
+
+To publish MP4 videos to MAI-UI-blog for GitHub Pages hosting:
+
+  1. Generate .json.gz + .mp4:
+     uv run python site/bundle_trajs.py <traj_dir> -o site/trajs/<model>.json.gz \
+       --with-screenshots \
+       --video-base-url https://tongyi-mai.github.io/MAI-UI-blog/MobileWorld/trajs
+
+  2. Push .mp4 files to the asset repo:
+     git clone --depth 1 git@github.com:Tongyi-MAI/MAI-UI-blog.git /tmp/mai-ui-blog
+     cp site/trajs/*.mp4 /tmp/mai-ui-blog/site/MobileWorld/trajs/
+     cd /tmp/mai-ui-blog && git add -A && git commit -m "Update MobileWorld trajectory videos" && git push
 """
 
 import argparse
