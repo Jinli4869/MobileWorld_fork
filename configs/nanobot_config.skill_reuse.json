@@ -10,7 +10,12 @@
   "providers": {
     "custom": {
       "apiBase": "",
-      "apiKey": ""
+      "apiKey": "",
+      "extraBody": {
+        "chat_template_kwargs": {
+          "enable_thinking": false
+        }
+      }
     }
   },
   "tools": {
@@ -24,8 +29,16 @@
     "backend": "adb",
     "model": "qwen3.5-397b-a17b",
     "provider": "custom",
-    "agentProfile": "qwen3vl",
-    "maxSteps": 50,
+    "validatorModel": "qwen3.5-397b-a17b",
+    "grounderModel": "qwen3.5-397b-a17b",
+    "reuserModel": "qwen3.5-397b-a17b",
+    "agentProfile": "default",
+    "maxSteps": 25,
+    "stagnationLimit": 3,
+    "skillThreshold": 0.6,
+    "embeddingModel": "text-embedding-v4",
+    "embeddingApiBase": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    "embeddingApiKey": "sk-8d9079a32a024860b2676f3cbbc3286a",
     "imageScaleRatio": 1.0,
     "enableSkillExtraction": false,
     "enableSkillExecution": true,

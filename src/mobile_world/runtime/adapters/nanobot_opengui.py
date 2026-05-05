@@ -1928,6 +1928,9 @@ class NanobotOpenGUIAdapter(FrameworkAdapter):
                 gui_provider=gui_provider,
                 gui_model=gui_model,
             )
+            if agent_loop.tools.has("spawn"):
+                agent_loop.tools.unregister("spawn")
+                logger.debug("Disabled nanobot spawn tool for MobileWorld synchronous evaluation")
 
             session_key = f"mobile_world:{run_id}:{self._state.get('session_nonce')}"
             # instruction = (
@@ -1947,7 +1950,7 @@ class NanobotOpenGUIAdapter(FrameworkAdapter):
                 # "Do not use plain `adb`; use `mw_adb` for device control.\n"
                 "You can use a few mw_adb and web_search or any other tools in the previous steps to get task done or information collect.\n"
                 # "But you could only use gui_task for only 5 times, so dont break the task too piecemeal.\n"
-                "Better cut the tasks into different application tasks and keep the sub-task as big as possible.\n"
+                # "Better cut the tasks into different application tasks and keep the sub-task as big as possible.\n"
                 "Better use gui_task to complete gui operations rather than mw_adb, and use read_file to read trajectory screenshot for information gathering."
                 "Better use the original task goal for the gui_task tool, also you could use part of it, dont use a very simplified description for the gui_task tool.\n"
                 f"Task Goal: {task_goal}"
