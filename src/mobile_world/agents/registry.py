@@ -13,14 +13,18 @@ from loguru import logger
 from mobile_world.agents.base import BaseAgent
 from mobile_world.agents.implementations.gelab_agent import GelabAgent
 from mobile_world.agents.implementations.general_e2e_agent import GeneralE2EAgentMCP
+from mobile_world.agents.implementations.gui_owl_1_5 import GUIOWL15AgentMCP
 from mobile_world.agents.implementations.mai_ui_agent import MAIUINaivigationAgent
+from mobile_world.agents.implementations.opengui import OpenGUIDefaultAgentMCP
 from mobile_world.agents.implementations.planner_executor import PlannerExecutorAgentMCP
 from mobile_world.agents.implementations.qwen3vl import Qwen3VLAgentMCP
 from mobile_world.agents.implementations.seed_agent import SeedAgent
 from mobile_world.agents.implementations.ui_venus_agent import VenusNaviAgent
-from mobile_world.agents.implementations.gui_owl_1_5 import GUIOWL15AgentMCP
 
 AGENT_CONFIGS = {
+    "opengui": {
+        "class": OpenGUIDefaultAgentMCP,
+    },
     "qwen3vl": {
         "class": Qwen3VLAgentMCP,
     },
