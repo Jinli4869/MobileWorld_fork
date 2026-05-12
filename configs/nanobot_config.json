@@ -12,7 +12,7 @@
       "apiBase": "https://dashscope.aliyuncs.com/compatible-mode/v1",
       "apiKey": "sk-bcab316d69a7414faa9dc29737019333"
     },
-    "local": {
+    "vllm": {
       "apiBase": "http://localhost:8080/v1",
       "apiKey": ""
     }
@@ -27,10 +27,11 @@
   "gui": {
     "backend": "adb",
     "model": "qwen3.5-35b-a3b",
-    "provider": "local",
+    "provider": "vllm",
     "agentProfile": "default",
     "maxSteps": 50,
     "imageScaleRatio": 1.0,
+    "stagnationLimit": 3,
     "enableSkillExtraction": false,
     "enableSkillExecution": false,
     "evaluation": {
