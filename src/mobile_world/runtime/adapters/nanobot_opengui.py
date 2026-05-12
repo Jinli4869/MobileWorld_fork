@@ -1073,6 +1073,19 @@ def _infer_provider_name(model_name: str | None, llm_base_url: str | None) -> st
     return "custom"
 
 
+def _select_runtime_provider_name(
+    configured_provider_name: str | None,
+    *,
+    model_name: str | None,
+    llm_base_url: str | None,
+) -> str:
+    """Resolve the main nanobot provider without mutating GUI provider choice."""
+    normalized = (configured_provider_name or "auto").strip().lower()
+    if normalized in {"", "auto"}:
+        return _infer_provider_name(model_name, llm_base_url)
+    return normalized
+
+
 def _resolve_runtime_api_key(provider_name: str, explicit_api_key: str | None) -> str | None:
     if explicit_api_key:
         return explicit_api_key
@@ -1135,13 +1148,17 @@ def _build_mw_adb_wrapper(
         "if [[ ${#ARGS[@]} -ge 2 && \"${ARGS[0]}\" == \"-s\" ]]; then\n"
         "  SERIAL_ARGS=(\"${ARGS[0]}\" \"${ARGS[1]}\")\n"
         "  ARGS=(\"${ARGS[@]:2}\")\n"
-        "elif [[ -n \"$DEFAULT_SERIAL\" ]]; then\n"
-        "  SERIAL_ARGS=(\"-s\" \"$DEFAULT_SERIAL\")\n"
         "fi\n"
         "if [[ ${#ARGS[@]} -eq 0 ]]; then\n"
         "  exec docker exec \"$CONTAINER\" adb \"${SERIAL_ARGS[@]}\"\n"
         "fi\n"
         "CMD=\"${ARGS[0]}\"\n"
+        "if [[ ${#SERIAL_ARGS[@]} -eq 0 && -n \"$DEFAULT_SERIAL\" ]]; then\n"
+        "  case \"$CMD\" in\n"
+        "    devices|start-server|kill-server|version) ;;\n"
+        "    *) SERIAL_ARGS=(\"-s\" \"$DEFAULT_SERIAL\") ;;\n"
+        "  esac\n"
+        "fi\n"
         "if [[ \"$CMD\" == \"pull\" && ${#ARGS[@]} -ge 3 ]]; then\n"
         "  SRC=\"${ARGS[1]}\"\n"
         "  DST=\"${ARGS[2]}\"\n"
@@ -1206,6 +1223,42 @@ def _temporary_environ(updates: dict[str, str | None]):
                 os.environ.pop(key, None)
             else:
                 os.environ[key] = value
+
+
+@contextmanager
+def _temporary_mobileworld_adb_backend(adb_wrapper: Path | None):
+    if adb_wrapper is None:
+        yield
+        return
+
+    try:
+        from opengui.backends import adb as opengui_adb
+    except Exception:
+        yield
+        return
+
+    original_backend = getattr(opengui_adb, "AdbBackend", None)
+    if original_backend is None:
+        yield
+        return
+
+    class MobileWorldAdbBackend(original_backend):  # type: ignore[misc, valid-type]
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            kwargs["adb_path"] = str(adb_wrapper)
+            # MobileWorld's ADB lives inside the backend container. scrcpy's
+            # reverse/forward sockets are then created in the container network,
+            # while this Python process waits on the host, so use screencap/pull.
+            kwargs["use_scrcpy"] = False
+            super().__init__(*args, **kwargs)
+
+    MobileWorldAdbBackend.__name__ = "MobileWorldAdbBackend"
+    MobileWorldAdbBackend.__qualname__ = "MobileWorldAdbBackend"
+
+    opengui_adb.AdbBackend = MobileWorldAdbBackend
+    try:
+        yield
+    finally:
+        opengui_adb.AdbBackend = original_backend
 
 
 class NanobotOpenGUIAdapter(FrameworkAdapter):
@@ -1768,13 +1821,15 @@ class NanobotOpenGUIAdapter(FrameworkAdapter):
                 config.gui.artifacts_dir = str(gui_artifacts_root)
 
             runtime_llm_base_url = self.llm_base_url or _default_llm_base_url_from_env()
-            provider_name = str(getattr(config.agents.defaults, "provider", "auto") or "auto").strip().lower()
+            configured_provider_name = str(
+                getattr(config.agents.defaults, "provider", "auto") or "auto"
+            ).strip().lower()
             inferred_provider_name = _infer_provider_name(self.model_name, runtime_llm_base_url)
-            if provider_name in {"", "auto"}:
-                provider_name = inferred_provider_name
-            elif runtime_llm_base_url and inferred_provider_name not in {"", "custom"}:
-                # Explicit runtime base URL takes precedence over static config provider.
-                provider_name = inferred_provider_name
+            provider_name = _select_runtime_provider_name(
+                configured_provider_name,
+                model_name=self.model_name,
+                llm_base_url=runtime_llm_base_url,
+            )
             config.agents.defaults.provider = provider_name
 
             provider_cfg = getattr(config.providers, provider_name, None)
@@ -1812,13 +1867,20 @@ class NanobotOpenGUIAdapter(FrameworkAdapter):
             if config.gui is None:
                 raise RuntimeError("nanobot_gui_config_missing")
 
-            config.gui.model = runtime_model
-            config.gui.provider = provider_name
             if getattr(config.gui, "evaluation", None) is not None:
-                config.gui.evaluation.judge_model = runtime_model
-                if runtime_api_key and hasattr(config.gui.evaluation, "api_key"):
+                if not getattr(config.gui.evaluation, "judge_model", None):
+                    config.gui.evaluation.judge_model = runtime_model
+                if (
+                    runtime_api_key
+                    and hasattr(config.gui.evaluation, "api_key")
+                    and not getattr(config.gui.evaluation, "api_key", None)
+                ):
                     config.gui.evaluation.api_key = runtime_api_key
-                if runtime_llm_base_url and hasattr(config.gui.evaluation, "api_base"):
+                if (
+                    runtime_llm_base_url
+                    and hasattr(config.gui.evaluation, "api_base")
+                    and not getattr(config.gui.evaluation, "api_base", None)
+                ):
                     config.gui.evaluation.api_base = runtime_llm_base_url
 
             gui_task_max_steps = _coerce_int(
@@ -1830,8 +1892,10 @@ class NanobotOpenGUIAdapter(FrameworkAdapter):
             config.gui.max_steps = gui_task_max_steps
             enable_planner = bool(self._state.get("nanobot_enable_planner", False))
             enable_router = bool(self._state.get("nanobot_enable_router", False))
-            config.gui.enable_planner = enable_planner
-            config.gui.enable_router = bool(enable_planner and enable_router)
+            if hasattr(config.gui, "enable_planner"):
+                config.gui.enable_planner = enable_planner
+            if hasattr(config.gui, "enable_router"):
+                config.gui.enable_router = bool(enable_planner and enable_router)
 
             if adb_wrapper is not None:
                 adb_cfg = getattr(config.gui, "adb", None)
@@ -1848,6 +1912,8 @@ class NanobotOpenGUIAdapter(FrameworkAdapter):
                 provider_override=provider_name,
             )
             gui_provider, gui_model = _resolve_gui_runtime(config)
+            gui_provider_name = str(getattr(config.gui, "provider", None) or provider_name)
+            gui_model_name = str(gui_model or getattr(config.gui, "model", None) or runtime_model)
             gui_task_max_calls = _coerce_int(
                 self._state.get("nanobot_gui_task_max_calls"),
                 default=3,
@@ -1907,31 +1973,6 @@ class NanobotOpenGUIAdapter(FrameworkAdapter):
             cron_store_path = config.workspace_path / "cron" / "jobs.json"
             cron = CronService(cron_store_path)
 
-            agent_loop = AgentLoop(
-                bus=bus,
-                provider=provider,
-                workspace=config.workspace_path,
-                model=runtime_model,
-                max_iterations=int(
-                    self._state.get("nanobot_max_steps")
-                    or config.agents.defaults.max_tool_iterations
-                ),
-                context_window_tokens=config.agents.defaults.context_window_tokens,
-                web_search_config=config.tools.web.search,
-                web_proxy=config.tools.web.proxy or None,
-                exec_config=config.tools.exec,
-                cron_service=cron,
-                restrict_to_workspace=config.tools.restrict_to_workspace,
-                mcp_servers=config.tools.mcp_servers,
-                channels_config=config.channels,
-                gui_config=config.gui,
-                gui_provider=gui_provider,
-                gui_model=gui_model,
-            )
-            if agent_loop.tools.has("spawn"):
-                agent_loop.tools.unregister("spawn")
-                logger.debug("Disabled nanobot spawn tool for MobileWorld synchronous evaluation")
-
             session_key = f"mobile_world:{run_id}:{self._state.get('session_nonce')}"
             # instruction = (
             #     "You are running inside MobileWorld benchmark evaluation. "
@@ -1971,8 +2012,33 @@ class NanobotOpenGUIAdapter(FrameworkAdapter):
                 )
             if isinstance(device, str) and device.strip():
                 env_updates["ANDROID_SERIAL"] = device.strip()
+            agent_loop = None
             try:
-                with _temporary_environ(env_updates):
+                with _temporary_environ(env_updates), _temporary_mobileworld_adb_backend(adb_wrapper):
+                    agent_loop = AgentLoop(
+                        bus=bus,
+                        provider=provider,
+                        workspace=config.workspace_path,
+                        model=runtime_model,
+                        max_iterations=int(
+                            self._state.get("nanobot_max_steps")
+                            or config.agents.defaults.max_tool_iterations
+                        ),
+                        context_window_tokens=config.agents.defaults.context_window_tokens,
+                        web_search_config=config.tools.web.search,
+                        web_proxy=config.tools.web.proxy or None,
+                        exec_config=config.tools.exec,
+                        cron_service=cron,
+                        restrict_to_workspace=config.tools.restrict_to_workspace,
+                        mcp_servers=config.tools.mcp_servers,
+                        channels_config=config.channels,
+                        gui_config=config.gui,
+                        gui_provider=gui_provider,
+                        gui_model=gui_model,
+                    )
+                    if agent_loop.tools.has("spawn"):
+                        agent_loop.tools.unregister("spawn")
+                        logger.debug("Disabled nanobot spawn tool for MobileWorld synchronous evaluation")
                     response = await agent_loop.process_direct(
                         instruction,
                         session_key=session_key,
@@ -1982,8 +2048,9 @@ class NanobotOpenGUIAdapter(FrameworkAdapter):
                     session = agent_loop.sessions.get_or_create(session_key)
                     messages = list(session.messages)
             finally:
-                await agent_loop.close_mcp()
-                agent_loop.stop()
+                if agent_loop is not None:
+                    await agent_loop.close_mcp()
+                    agent_loop.stop()
 
         wrapper_mw_adb_calls = 0
         wrapper_adb_calls = 0
@@ -2002,6 +2069,10 @@ class NanobotOpenGUIAdapter(FrameworkAdapter):
             "summary": response.content if response is not None else "",
             "messages": messages,
             "default_gui_backend": getattr(config.gui, "backend", None),
+            "main_model": runtime_model,
+            "main_provider": provider_name,
+            "gui_model": gui_model_name,
+            "gui_provider": gui_provider_name,
             "gui_artifacts_root": str(gui_artifacts_root),
             "wrapper_mw_adb_calls": wrapper_mw_adb_calls,
             "wrapper_adb_calls": wrapper_adb_calls,
@@ -2051,12 +2122,15 @@ class NanobotOpenGUIAdapter(FrameworkAdapter):
                 config.gui.artifacts_dir = str(gui_artifacts_root)
 
             runtime_llm_base_url = self.llm_base_url or _default_llm_base_url_from_env()
-            provider_name = str(getattr(config.agents.defaults, "provider", "auto") or "auto").strip().lower()
+            configured_provider_name = str(
+                getattr(config.agents.defaults, "provider", "auto") or "auto"
+            ).strip().lower()
             inferred_provider_name = _infer_provider_name(self.model_name, runtime_llm_base_url)
-            if provider_name in {"", "auto"}:
-                provider_name = inferred_provider_name
-            elif runtime_llm_base_url and inferred_provider_name not in {"", "custom"}:
-                provider_name = inferred_provider_name
+            provider_name = _select_runtime_provider_name(
+                configured_provider_name,
+                model_name=self.model_name,
+                llm_base_url=runtime_llm_base_url,
+            )
             config.agents.defaults.provider = provider_name
 
             provider_cfg = getattr(config.providers, provider_name, None)
@@ -2071,15 +2145,24 @@ class NanobotOpenGUIAdapter(FrameworkAdapter):
             if runtime_llm_base_url and hasattr(provider_cfg, "api_base"):
                 provider_cfg.api_base = runtime_llm_base_url
 
-            config.gui.model = runtime_model
-            config.gui.provider = provider_name
-            config.gui.enable_planner = False
-            config.gui.enable_router = False
+            if hasattr(config.gui, "enable_planner"):
+                config.gui.enable_planner = False
+            if hasattr(config.gui, "enable_router"):
+                config.gui.enable_router = False
             if getattr(config.gui, "evaluation", None) is not None:
-                config.gui.evaluation.judge_model = runtime_model
-                if runtime_api_key and hasattr(config.gui.evaluation, "api_key"):
+                if not getattr(config.gui.evaluation, "judge_model", None):
+                    config.gui.evaluation.judge_model = runtime_model
+                if (
+                    runtime_api_key
+                    and hasattr(config.gui.evaluation, "api_key")
+                    and not getattr(config.gui.evaluation, "api_key", None)
+                ):
                     config.gui.evaluation.api_key = runtime_api_key
-                if runtime_llm_base_url and hasattr(config.gui.evaluation, "api_base"):
+                if (
+                    runtime_llm_base_url
+                    and hasattr(config.gui.evaluation, "api_base")
+                    and not getattr(config.gui.evaluation, "api_base", None)
+                ):
                     config.gui.evaluation.api_base = runtime_llm_base_url
 
             gui_task_max_steps = _coerce_int(
@@ -2101,6 +2184,8 @@ class NanobotOpenGUIAdapter(FrameworkAdapter):
                 adb_cfg.serial = device.strip()
 
             gui_provider, gui_model = _resolve_gui_runtime(config)
+            gui_provider_name = str(getattr(config.gui, "provider", None) or provider_name)
+            gui_model_name = str(gui_model or getattr(config.gui, "model", None) or runtime_model)
             gui_usage_accum = _empty_token_usage()
             gui_usage_stats = {"calls": 0, "missing": 0}
             _instrument_provider_usage(
@@ -2112,7 +2197,7 @@ class NanobotOpenGUIAdapter(FrameworkAdapter):
             gui_tool = GuiSubagentTool(
                 gui_config=config.gui,
                 provider=gui_provider,
-                model=gui_model or runtime_model,
+                model=gui_model_name,
                 workspace=config.workspace_path,
             )
             # Strict direct-GUI mode avoids nanobot policy-memory injection. Skill
@@ -2178,6 +2263,10 @@ class NanobotOpenGUIAdapter(FrameworkAdapter):
             "summary": str(result_payload.get("summary") or ""),
             "messages": [],
             "error": result_payload.get("error"),
+            "main_model": runtime_model,
+            "main_provider": provider_name,
+            "gui_model": gui_model_name,
+            "gui_provider": gui_provider_name,
             "adb_calls": 0,
             "gui_task_calls": gui_task_calls,
             "deeplink_calls": 0,
@@ -2612,6 +2701,10 @@ class NanobotOpenGUIAdapter(FrameworkAdapter):
             "opengui_execution_mode": self._state.get("opengui_execution_mode"),
             "evaluation_mode": self._state.get("evaluation_mode", "mixed"),
             "allow_adb_bypass": bool(self._state.get("allow_adb_bypass", True)),
+            "main_model": mixed_result.get("main_model"),
+            "main_provider": mixed_result.get("main_provider"),
+            "gui_model": mixed_result.get("gui_model"),
+            "gui_provider": mixed_result.get("gui_provider"),
             "nanobot_max_steps": self._state.get("nanobot_max_steps"),
             "nanobot_enable_planner": bool(self._state.get("nanobot_enable_planner", False)),
             "nanobot_enable_router": bool(self._state.get("nanobot_enable_router", False)),
@@ -2672,6 +2765,10 @@ class NanobotOpenGUIAdapter(FrameworkAdapter):
                 "execution_mode": str(mixed_result.get("execution_mode") or reported_execution_mode),
                 "opengui_execution_mode": self._state.get("opengui_execution_mode"),
                 "allow_adb_bypass": bool(self._state.get("allow_adb_bypass", True)),
+                "main_model": mixed_result.get("main_model"),
+                "main_provider": mixed_result.get("main_provider"),
+                "gui_model": mixed_result.get("gui_model"),
+                "gui_provider": mixed_result.get("gui_provider"),
                 "nanobot_max_steps": self._state.get("nanobot_max_steps"),
                 "nanobot_gui_task_max_steps": _coerce_int(
                     self._state.get("nanobot_gui_task_max_steps"),
@@ -2717,6 +2814,10 @@ class NanobotOpenGUIAdapter(FrameworkAdapter):
             "opengui_execution_mode": self._state.get("opengui_execution_mode"),
             "evaluation_mode": self._state.get("evaluation_mode", "mixed"),
             "allow_adb_bypass": bool(self._state.get("allow_adb_bypass", True)),
+            "main_model": (self._mixed_summary or {}).get("main_model"),
+            "main_provider": (self._mixed_summary or {}).get("main_provider"),
+            "gui_model": (self._mixed_summary or {}).get("gui_model"),
+            "gui_provider": (self._mixed_summary or {}).get("gui_provider"),
             "nanobot_max_steps": self._state.get("nanobot_max_steps"),
             "nanobot_enable_planner": bool(self._state.get("nanobot_enable_planner", False)),
             "nanobot_enable_router": bool(self._state.get("nanobot_enable_router", False)),

@@ -7,7 +7,10 @@ from PIL import Image
 
 from mobile_world.agents.registry import create_framework_adapter
 from mobile_world.core.runner import _execute_single_task
-from mobile_world.runtime.adapters.nanobot_opengui import NanobotOpenGUIAdapter
+from mobile_world.runtime.adapters.nanobot_opengui import (
+    NanobotOpenGUIAdapter,
+    _select_runtime_provider_name,
+)
 from mobile_world.runtime.protocol.adapter import (
     AdapterArtifactsResult,
     AdapterFinalizeInput,
@@ -45,6 +48,26 @@ def _read_jsonl(path: Path) -> list[dict]:
 
 def _write_nanobot_config(path: Path) -> None:
     path.write_text(json.dumps({"gui": {"backend": "adb"}}, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def test_runtime_provider_selection_preserves_explicit_main_provider():
+    provider = _select_runtime_provider_name(
+        "custom",
+        model_name="qwen3.5-397b-a3b",
+        llm_base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+    )
+
+    assert provider == "custom"
+
+
+def test_runtime_provider_selection_infers_only_for_auto_provider():
+    provider = _select_runtime_provider_name(
+        "auto",
+        model_name="qwen3.5-397b-a3b",
+        llm_base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+    )
+
+    assert provider == "dashscope"
 
 
 class DummyEnv:

@@ -2,14 +2,18 @@
   "agents": {
     "defaults": {
       "workspace": "/home/jinli/Project/MobileWorld_fork",
-      "model": "Qwen3.5-397B-A17B",
+      "model": "qwen3.5-397b-a17b",
       "provider": "custom",
       "maxToolIterations": 50
     }
   },
   "providers": {
     "custom": {
-      "apiBase": "",
+      "apiBase": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "apiKey": "sk-bcab316d69a7414faa9dc29737019333"
+    },
+    "local": {
+      "apiBase": "http://localhost:8080/v1",
       "apiKey": ""
     }
   },
@@ -22,18 +26,16 @@
   },
   "gui": {
     "backend": "adb",
-    "model": "Qwen3.5-397B-A17B",
-    "provider": "custom",
-    "agentProfile": "qwen3vl",
+    "model": "qwen3.5-35b-a3b",
+    "provider": "local",
+    "agentProfile": "default",
     "maxSteps": 50,
     "imageScaleRatio": 1.0,
-    "enableSkillExtraction": true,
+    "enableSkillExtraction": false,
     "enableSkillExecution": false,
-    "enablePlanner": false,
-    "enableRouter": false,
     "evaluation": {
       "enabled": false,
-      "judgeModel": "Qwen3.5-397B-A17B",
+      "judgeModel": "qwen3.5-397b-a17b",
       "apiBase": "",
       "apiKey": ""
     }

@@ -42,8 +42,6 @@
     "imageScaleRatio": 1.0,
     "enableSkillExtraction": false,
     "enableSkillExecution": true,
-    "enablePlanner": false,
-    "enableRouter": false,
     "evaluation": {
       "enabled": false,
       "judgeModel": "qwen3.5-397b-a17b",

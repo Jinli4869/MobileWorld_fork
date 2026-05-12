@@ -9,7 +9,11 @@
   },
   "providers": {
     "custom": {
-      "apiBase": "",
+      "apiBase": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "apiKey": "sk-bcab316d69a7414faa9dc29737019333"
+    },
+    "local": {
+      "apiBase": "http://localhost:8080/v1",
       "apiKey": ""
     }
   },
@@ -22,19 +26,17 @@
   },
   "gui": {
     "backend": "adb",
-    "model": "qwen3.5-397b-a17b",
+    "model": "qwen3.5-35b-a3b",
     "provider": "custom",
     "agentProfile": "qwen3vl",
     "maxSteps": 50,
     "imageScaleRatio": 1.0,
     "enableSkillExtraction": true,
     "enableSkillExecution": false,
-    "enablePlanner": false,
-    "enableRouter": false,
     "evaluation": {
       "enabled": true,
-      "judgeModel": "qwen3.5-397b-a17b",
-      "apiBase": "",
+      "judgeModel": "qwen3.5-35b-a3b",
+      "apiBase": "http://localhost:8080/v1",
       "apiKey": ""
     }
   }

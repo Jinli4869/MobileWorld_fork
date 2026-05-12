@@ -1,18 +1,16 @@
 {
   "framework_profile": "nanobot_opengui",
   "nanobot_fork_path": "/home/jinli/Project/nanobot_fork",
-  "nanobot_config_path": "/home/jinli/Project/MobileWorld_fork/configs/nanobot_config.skill_learn.json",
+  "nanobot_config_path": "/home/jinli/Project/MobileWorld_fork/configs/nanobot_config.json",
   "gui_claw_path": "/home/jinli/Project/MobileWorld_fork",
   "evaluation_mode": "mixed",
   "opengui_execution_mode": "nanobot_loop",
   "allow_adb_bypass": true,
   "nanobot_max_steps": 50,
-  "nanobot_gui_task_max_steps": 50,
-  "nanobot_gui_task_max_calls": 3,
+  "nanobot_gui_task_max_steps": 25,
+  "nanobot_gui_task_max_calls": 5,
   "nanobot_timeout_seconds": 1200,
-  "nanobot_enable_planner": false,
-  "nanobot_enable_router": false,
   "env_auto_recover": true,
   "env_recover_unhealthy_threshold": 2,
-  "judge_model": "qwen3.5-397b-a17b"
+  "judge_model": "qwen3.5-35b-a3b"
 }
