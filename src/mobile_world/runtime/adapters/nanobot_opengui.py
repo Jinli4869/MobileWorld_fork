@@ -1989,11 +1989,12 @@ class NanobotOpenGUIAdapter(FrameworkAdapter):
             # )
             instruction = (
                 # "Do not use plain `adb`; use `mw_adb` for device control.\n"
-                "You can use a few mw_adb and web_search or any other tools in the previous steps to get task done or information collect.\n"
+                "You can use a few mw_adb(adb alias) and web_search in the previous steps to get task done or information collect(e.g. gather information/search for information about the apps and polish the instruction for gui_task).\n"
                 # "But you could only use gui_task for only 5 times, so dont break the task too piecemeal.\n"
                 # "Better cut the tasks into different application tasks and keep the sub-task as big as possible.\n"
-                "Better use gui_task to complete gui operations rather than mw_adb, and use read_file to read trajectory screenshot for information gathering."
-                "Better use the original task goal for the gui_task tool, also you could use part of it, dont use a very simplified description for the gui_task tool.\n"
+                "Better use gui_task to complete gui operations rather than mw_adb, and use read_file to read trajectory screenshot for information gathering(only the files in the local trajectory and now allowed to read other files)."
+                "Use the original task goal for the first gui_task tool use, also you could use part of it, dont use a very simplified description for the gui_task tool.\n"
+                "For continuous gui_task calls, you should keep the context and state in the later calls(instructions), and you could also use the information from the previous calls(or read from trajectory screenshot) to polish the instruction for the later gui_task calls, but remember to keep the instruction concise and clear for each gui_task call.\n"
                 f"Task Goal: {task_goal}"
             )
             if mw_adb_wrapper is not None:
